@@ -16,10 +16,26 @@
 
 "int"           { return INT; }
 "print"         { return PRINT; }
+"string"        { return STRING; }
 
 [a-zA-Z_][a-zA-Z0-9_]* { 
     yylval.str = strdup(yytext);
     return ID; 
+}
+
+  /* it matches a quoted token, strips the quotes, allocates a heap buffer (malloc/strdup) and stores it in yylval.str.
+  *the lexer allocates a temporary buffer, and the parser frees it after the AST node is created.
+  */
+"\""[^"]*"\""    {
+    /* match a double-quoted string, copy without quotes */
+    int len = yyleng;
+    if (len >= 2) {
+        char *s = malloc(len-1);
+        strncpy(s, yytext+1, len-2);
+        s[len-2] = '\0';
+        yylval.str = s;
+        return STRING_LITERAL;
+    }
 }
 
 [0-9]+          { 

@@ -10,6 +10,8 @@
 /* NODE TYPES - Different kinds of AST nodes in our language */
 typedef enum {
     NODE_NUM,       /* Numeric literal (e.g., 42) */
+    NODE_STR,       /* String literal (e.g., "hello") */
+    NODE_STR_DECL,  /* String variable declaration (e.g., string s;) */
     NODE_VAR,       /* Variable reference (e.g., x) */
     NODE_BINOP,     /* Binary operation (e.g., x + y) */
     NODE_DECL,      /* Variable declaration (e.g., int x) */
@@ -32,6 +34,8 @@ typedef struct ASTNode {
     union {
         /* Literal number value (NODE_NUM) */
         int num;
+    /* String literal value (NODE_STR) */
+    char* str;
         
         /* Variable or declaration name (NODE_VAR, NODE_DECL) */
         char* name;
@@ -85,7 +89,9 @@ typedef struct ASTNode {
 ASTNode* createNum(int value);                                   /* Create number node */
 ASTNode* createVar(char* name);                                  /* Create variable node */
 ASTNode* createBinOp(char op, ASTNode* left, ASTNode* right);   /* Create binary op node */
+ASTNode* createStringLit(char* s);                               /* Create string literal node */
 ASTNode* createDecl(char* name);                                /* Create declaration node */
+ASTNode* createStrDecl(char* name);                             /* Create string declaration node */
 /* Add new functions here*/
 ASTNode* createAssign(char* var, ASTNode* value);               /* Create assignment node */
 ASTNode* createPrint(ASTNode* expr);                            /* Create print node */

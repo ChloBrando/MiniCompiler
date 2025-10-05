@@ -8,6 +8,14 @@
 #include <string.h>
 #include "symtab.h"
 
+/* Compile-time flag: set to 1 to enable symbol-table debug printing */
+#ifndef SYMTAB_DEBUG
+#define SYMTAB_DEBUG 0
+#endif
+
+/* Internal forward declaration for the debug print function (file-local) */
+static void printSymTab(void);
+
 /* Global symbol table instance */
 SymbolTable symtab;
 
@@ -15,30 +23,60 @@ SymbolTable symtab;
 void initSymTab() {
     symtab.count = 0;       /* No variables yet */
     symtab.nextOffset = 0;  /* Start at stack offset 0 */
+#if SYMTAB_DEBUG
     printf("SYMBOL TABLE: Initialized\n");
     printSymTab();
+#endif
 }
 
 /* Add a new variable to the symbol table */
 int addVar(char* name) {
     /* Check for duplicate declaration */
     if (isVarDeclared(name)) {
+#if SYMTAB_DEBUG
         printf("SYMBOL TABLE: Failed to add '%s' - already declared\n", name);
+#endif
         return -1;  /* Error: variable already exists */
     }
 
     /* Add new symbol entry */
     symtab.vars[symtab.count].name = strdup(name);
     symtab.vars[symtab.count].offset = symtab.nextOffset;
+    symtab.vars[symtab.count].type = 0; /* int type */
+    symtab.vars[symtab.count].isArray = 0;
+    symtab.vars[symtab.count].arraySize = 0;
 
     /* Advance offset by 4 bytes (size of int in MIPS) */
     symtab.nextOffset += 4;
     symtab.count++;
 
+#if SYMTAB_DEBUG
     printf("SYMBOL TABLE: Added variable '%s' at offset %d\n", name, symtab.vars[symtab.count - 1].offset);
     printSymTab();
+#endif
 
     /* Return the offset for this variable */
+    return symtab.vars[symtab.count - 1].offset;
+}
+
+int addStringVar(char* name) {
+    if (isVarDeclared(name)) {
+#if SYMTAB_DEBUG
+        printf("SYMBOL TABLE: Failed to add '%s' - already declared\n", name);
+#endif
+        return -1;
+    }
+    symtab.vars[symtab.count].name = strdup(name);
+    symtab.vars[symtab.count].offset = symtab.nextOffset;
+    symtab.vars[symtab.count].isArray = 0;
+    symtab.vars[symtab.count].arraySize = 0;
+    symtab.vars[symtab.count].type = 1; /* string type */
+    symtab.nextOffset += 4; /* pointer size */
+    symtab.count++;
+#if SYMTAB_DEBUG
+    printf("SYMBOL TABLE: Added string variable '%s' at offset %d\n", name, symtab.vars[symtab.count - 1].offset);
+    printSymTab();
+#endif
     return symtab.vars[symtab.count - 1].offset;
 }
 
@@ -47,11 +85,15 @@ int getVarOffset(char* name) {
     /* Linear search through symbol table */
     for (int i = 0; i < symtab.count; i++) {
         if (strcmp(symtab.vars[i].name, name) == 0) {
+#if SYMTAB_DEBUG
             printf("SYMBOL TABLE: Found variable '%s' at offset %d\n", name, symtab.vars[i].offset);
+#endif
             return symtab.vars[i].offset;  /* Found it */
         }
     }
+#if SYMTAB_DEBUG
     printf("SYMBOL TABLE: Variable '%s' not found\n", name);
+#endif
     return -1;  /* Variable not found - semantic error */
 }
 
@@ -62,7 +104,9 @@ int isVarDeclared(char* name) {
 
 int addArrayVar(char* name, int size) {
     if (isVarDeclared(name)) {
+#if SYMTAB_DEBUG
         printf("SYMBOL TABLE: Failed to add array '%s' - already declared\n", name);
+#endif
         return -1;
     }
 
@@ -71,14 +115,17 @@ int addArrayVar(char* name, int size) {
     symtab.vars[symtab.count].offset = symtab.nextOffset;
     symtab.vars[symtab.count].isArray = 1;
     symtab.vars[symtab.count].arraySize = size;
+    symtab.vars[symtab.count].type = 0; /* array of int */
 
     /* Arrays need size * 4 bytes (4 bytes per int) */
     symtab.nextOffset += size * 4;
     symtab.count++;
 
+#if SYMTAB_DEBUG
     printf("SYMBOL TABLE: Added array '%s[%d]' at offset %d\n",
-           name, size, symtab.vars[symtab.count - 1].offset);
+        name, size, symtab.vars[symtab.count - 1].offset);
     printSymTab();
+#endif
 
     return symtab.vars[symtab.count - 1].offset;
 }
@@ -100,13 +147,22 @@ int getArraySize(char* name) {
             return symtab.vars[i].arraySize;
         }
     }
-    return 0;  /* Not found */
+    return -1;  /* Not found */
+}
+
+int isStringVar(char* name) {
+    for (int i = 0; i < symtab.count; i++) {
+        if (strcmp(symtab.vars[i].name, name) == 0) {
+            return symtab.vars[i].type == 1;
+        }
+    }
+    return 0;
 }
 
 
 
 /* Print current symbol table contents for debugging/tracing */
-void printSymTab() {
+static void printSymTab() {
     printf("\n=== SYMBOL TABLE STATE ===\n");
     printf("Count: %d, Next Offset: %d\n", symtab.count, symtab.nextOffset);
     if (symtab.count == 0) {

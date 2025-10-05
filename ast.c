@@ -33,11 +33,27 @@ ASTNode* createBinOp(char op, ASTNode* left, ASTNode* right) {
     return node;
 }
 
+/* Create a string literal node */
+ASTNode* createStringLit(char* s) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_STR;
+    node->data.str = strdup(s);
+    return node;
+}
+
 /* Create a variable declaration node */
 ASTNode* createDecl(char* name) {
     ASTNode* node = malloc(sizeof(ASTNode));
     node->type = NODE_DECL;
     node->data.name = strdup(name);  /* Store variable name */
+    return node;
+}
+
+/* Create a string declaration node */
+ASTNode* createStrDecl(char* name) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_STR_DECL;
+    node->data.name = strdup(name);
     return node;
 }
 
@@ -106,6 +122,9 @@ void printAST(ASTNode* node, int level) {
     switch(node->type) {
         case NODE_NUM:
             printf("NUM: %d\n", node->data.num);
+            break;
+        case NODE_STR:
+            printf("STR: %s\n", node->data.str);
             break;
         case NODE_VAR:
             printf("VAR: %s\n", node->data.name);

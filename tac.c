@@ -61,6 +61,10 @@ char* generateTACExpr(ASTNode* node) {
         
         case NODE_VAR:
             return strdup(node->data.name);
+
+        case NODE_STR:
+            /* Return the string literal text so TAC can carry it as an operand */
+            return strdup(node->data.str);
         
         case NODE_BINOP: {
             char* left = generateTACExpr(node->data.binop.left);
@@ -96,6 +100,10 @@ void generateTAC(ASTNode* node) {
     
     switch(node->type) {
         case NODE_DECL:
+            appendTAC(createTAC(TAC_DECL, NULL, NULL, node->data.name));
+            break;
+        case NODE_STR_DECL:
+            /* String variable declaration appears as a normal decl in TAC */
             appendTAC(createTAC(TAC_DECL, NULL, NULL, node->data.name));
             break;
             

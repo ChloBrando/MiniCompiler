@@ -31,7 +31,8 @@ ASTNode* root = NULL;          /* Root of the Abstract Syntax Tree */
 /* TOKEN DECLARATIONS with their semantic value types */
 %token <num> NUM        /* Number token carries an integer value */
 %token <str> ID         /* Identifier token carries a string */
-%token INT PRINT VAR        /* Keywords have no semantic value */
+%token INT PRINT VAR STRING        /* Keywords have no semantic value */
+%token <str> STRING_LITERAL
 
 /* NON-TERMINAL TYPES - Define what type each grammar rule returns */
 %type <node> program stmt_list stmt decl assign expr print_stmt
@@ -73,12 +74,40 @@ stmt:
 /* DECLARATION RULE - "int x;" and "int x[NUM];" */
 decl:
     INT ID ';' { 
-        $$ = createDecl($2);
-        free($2);
+                /* Create an AST node for an integer declaration.
+                 * The lexer returned the identifier as a heap-allocated string
+                 * (yylval.str = strdup(yytext)) so the parser receives ownership
+                 * of that char* in $2. We pass the name into createDecl which
+                 * copies or stores the name as needed in the AST, and then we
+                 * free($2) here to avoid a temporary memory leak in the parser.
+                 *
+                 * Important: calling free() here does NOT "reserve stack space"
+                 * or allocate runtime memory for the variable. The parser only
+                 * builds the AST. Actual stack offsets and memory layout are
+                 * created later by the semantic pass (symtab) when we call
+                 * addVar/addArrayVar/addStringVar.
+                 */
+                $$ = createDecl($2);
+                free($2);
     }
   | INT ID '[' NUM ']' ';' { 
-        $$ = createArrayDecl($2, $4);
-        free($2);
+                /* Build an AST node representing an array declaration.
+                 * The NUM value ($4) is a compile-time constant for the size.
+                 * The string $2 was allocated by the lexer and must be freed
+                 * after the parser copies or consumes it. Again, no runtime
+                 * memory is allocated here — this is purely syntactic AST work.
+                 */
+                $$ = createArrayDecl($2, $4);
+                free($2);
+    }
+  | STRING ID ';' {
+            /* String declaration: create AST node and free parser temp memory.
+             * createStrDecl only records the intention to declare a string;
+             * the semantic phase will actually register it in the symbol table
+             * and assign a stack offset for runtime storage of a pointer.
+             */
+            $$ = createStrDecl($2);
+            free($2);
     }
   ;
 
@@ -105,6 +134,17 @@ expr:
         /* Variable reference */
         $$ = createVar($1);  /* Create leaf node with variable name */
         free($1);            /* Free the identifier string */
+    }
+    | STRING_LITERAL {
+        /* String literal: the lexer allocated a C string and put it in $1.
+         * createStringLit will create an AST node that typically copies
+         * the pointer into the node structure (or copies the contents).
+         * After creating the AST node we call free($1) to release the
+         * temporary buffer allocated by the lexer. The AST owns whatever
+         * it needs after this call.
+         */
+        $$ = createStringLit($1);
+        free($1);
     }
     | expr '+' expr { 
         /* Addition operation - builds binary tree */
