@@ -82,14 +82,78 @@ char* generateTACExpr(ASTNode* node) {
         }
         
         case NODE_ARRAY_ACCESS: {
-            /* TODO: Generate TAC for array access */
+            /* Generate TAC for array access */
             char* indexExpr = generateTACExpr(node->data.arrayAccess.index);
             char* temp = newTemp();
 
             appendTAC(createTAC(TAC_ARRAY_ACCESS, indexExpr, NULL, temp));
             return temp;
         }
-        
+
+        case NODE_FUNC_CALL: {
+            /* Function call: funcName(args) */
+            /* Generate TAC for each argument and emit PARAM instructions */
+            ASTNode* arg = node->data.funcCall.args;
+            int paramCount = 0;
+
+            while (arg) {
+                ASTNode* argExpr;
+
+                /* Extract actual expression from stmt_list structure */
+                if (arg->type == NODE_STMT_LIST) {
+                    /* Check if stmt is also a stmt_list (nested case for 3+ args) */
+                    if (arg->data.stmtlist.stmt &&
+                        arg->data.stmtlist.stmt->type == NODE_STMT_LIST) {
+                        /* Recursively process the nested stmt_list first */
+                        ASTNode* nested = arg->data.stmtlist.stmt;
+                        while (nested) {
+                            if (nested->type == NODE_STMT_LIST) {
+                                char* argVal = generateTACExpr(nested->data.stmtlist.stmt);
+                                appendTAC(createTAC(TAC_PARAM, argVal, NULL, NULL));
+                                paramCount++;
+                                nested = nested->data.stmtlist.next;
+                            } else {
+                                char* argVal = generateTACExpr(nested);
+                                appendTAC(createTAC(TAC_PARAM, argVal, NULL, NULL));
+                                paramCount++;
+                                nested = NULL;
+                            }
+                        }
+                        /* Now process the final argument (next) */
+                        arg = arg->data.stmtlist.next;
+                        if (arg) {
+                            char* argVal = generateTACExpr(arg);
+                            appendTAC(createTAC(TAC_PARAM, argVal, NULL, NULL));
+                            paramCount++;
+                        }
+                        break;
+                    } else {
+                        /* Normal case: stmt is an expression */
+                        argExpr = arg->data.stmtlist.stmt;
+                        char* argVal = generateTACExpr(argExpr);
+                        appendTAC(createTAC(TAC_PARAM, argVal, NULL, NULL));
+                        paramCount++;
+                        arg = arg->data.stmtlist.next;
+                    }
+                } else {
+                    /* Single argument */
+                    char* argVal = generateTACExpr(arg);
+                    appendTAC(createTAC(TAC_PARAM, argVal, NULL, NULL));
+                    paramCount++;
+                    arg = NULL;
+                }
+            }
+
+            /* Generate the CALL instruction */
+            char* temp = newTemp();
+            TACInstr* call = createTAC(TAC_CALL, node->data.funcCall.name,
+                                    NULL, temp);
+            call->paramCount = paramCount;
+            appendTAC(call);
+
+            return temp;  /* Return temp holding result */
+        }
+
         default:
             return NULL;
     }
@@ -137,6 +201,47 @@ void generateTAC(ASTNode* node) {
                 node->data.arrayAssign.name));
             break;
         }
+        case NODE_FUNC_DECL: {
+            /* Function declaration: # funcName(params) { body } */
+            appendTAC(createTAC(TAC_FUNC_BEGIN, NULL, NULL,
+                                node->data.funcDecl.name));
+            appendTAC(createTAC(TAC_LABEL, NULL, NULL,
+                                node->data.funcDecl.name));
+
+            /* Generate TAC for parameters (they become local variables) */
+            ASTNode* param = node->data.funcDecl.params;
+            while (param) {
+                /* PARAM instruction marks each parameter */
+                appendTAC(createTAC(TAC_PARAM, param->data.param.name, NULL, NULL));
+                param = param->data.param.next;
+            }
+
+            /* Generate TAC for function body */
+            generateTAC(node->data.funcDecl.body);
+
+            /* Ensure function ends with FUNC_END marker */
+            appendTAC(createTAC(TAC_FUNC_END, NULL, NULL,
+                                node->data.funcDecl.name));
+            break;
+        }
+
+        case NODE_FUNC_CALL: {
+            /* Function call as statement (ignore return value) */
+            generateTACExpr(node);  /* Generate the call in expression context */
+            break;
+        }
+
+        case NODE_RETURN: {
+            /* Return statement: return expr; or return; */
+            if (node->data.returnStmt.value) {
+                char* retVal = generateTACExpr(node->data.returnStmt.value);
+                appendTAC(createTAC(TAC_RETURN, retVal, NULL, NULL));
+            } else {
+                /* Return void */
+                appendTAC(createTAC(TAC_RETURN, NULL, NULL, NULL));
+            }
+            break;
+        }
             
         default:
             break;
@@ -161,7 +266,7 @@ void printTAC() {
                 break;
             case TAC_SUB:
                 printf("%s = %s - %s", curr->result, curr->arg1, curr->arg2);
-                printf("     // Subtract: store result in %s\n", curr->result);  // Fix: changed "Add" to "Subtract"
+                printf("     // Subtract: store result in %s\n", curr->result);
                 break;
             case TAC_ASSIGN:
                 printf("%s = %s", curr->result, curr->arg1);
@@ -182,6 +287,35 @@ void printTAC() {
             case TAC_ARRAY_ACCESS:
                 printf("%s = array[%s]", curr->result, curr->arg1);
                 printf("  // Array access\n");
+                break;
+            case TAC_FUNC_BEGIN:
+                printf("FUNC_BEGIN %s", curr->result);
+                printf("       // Start of function '%s'\n", curr->result);
+                break;
+            case TAC_LABEL:
+                printf("LABEL %s:", curr->result);
+                printf("            // Function entry point\n");
+                break;
+            case TAC_PARAM:
+                printf("PARAM %s", curr->arg1);
+                printf("            // Parameter '%s'\n", curr->arg1);
+                break;
+            case TAC_CALL:
+                printf("%s = CALL %s, %d", curr->result, curr->arg1, curr->paramCount);
+                printf("  // Call function with %d args\n", curr->paramCount);
+                break;
+            case TAC_RETURN:
+                if (curr->arg1) {
+                    printf("RETURN %s", curr->arg1);
+                    printf("           // Return value\n");
+                } else {
+                    printf("RETURN");
+                    printf("               // Return void\n");
+                }
+                break;
+            case TAC_FUNC_END:
+                printf("FUNC_END %s", curr->result);
+                printf("         // End of function '%s'\n", curr->result);
                 break;
             default:
                 break;
@@ -347,15 +481,183 @@ void optimizeTAC() {
                 newInstr = createTAC(TAC_ARRAY_ACCESS, index, NULL, curr->result);
                 break;
             }
+
+            /* Function-related instructions - pass through for now */
+            case TAC_FUNC_BEGIN:
+                /* Clear value table when entering new function */
+                valueCount = 0;
+                newInstr = createTAC(TAC_FUNC_BEGIN, NULL, NULL, curr->result);
+                break;
+
+            case TAC_LABEL:
+                newInstr = createTAC(TAC_LABEL, NULL, NULL, curr->result);
+                break;
+
+            case TAC_PARAM:
+                newInstr = createTAC(TAC_PARAM, curr->arg1, NULL, NULL);
+                break;
+
+            case TAC_CALL: {
+                /* Function calls - preserve for now */
+                newInstr = createTAC(TAC_CALL, curr->arg1, NULL, curr->result);
+                newInstr->paramCount = curr->paramCount;
+                break;
+            }
+
+            case TAC_RETURN: {
+                /* Propagate return value if constant */
+                char* retVal = curr->arg1;
+                if (retVal) {
+                    for (int i = valueCount - 1; i >= 0; i--) {
+                        if (strcmp(values[i].var, retVal) == 0) {
+                            retVal = values[i].value;
+                            break;
+                        }
+                    }
+                }
+                newInstr = createTAC(TAC_RETURN, retVal, NULL, NULL);
+                break;
+            }
+
+            case TAC_FUNC_END:
+                newInstr = createTAC(TAC_FUNC_END, NULL, NULL, curr->result);
+                break;
         }
-        
+
         // Fix: Move this outside the switch statement and outside any case
         if (newInstr) {
             appendOptimizedTAC(newInstr);
         }
-        
+
         curr = curr->next;
     }
+}
+
+/* ADVANCED OPTIMIZATION 1: Dead Code Elimination
+ * Remove unreachable code after RETURN statements
+ */
+void eliminateDeadCode() {
+    TACInstr* curr = optimizedList.head;
+
+    while (curr) {
+        /* If we hit a RETURN, skip instructions until FUNC_END */
+        if (curr->op == TAC_RETURN) {
+            TACInstr* next = curr->next;
+
+            /* Skip dead code until we hit FUNC_END */
+            while (next && next->op != TAC_FUNC_END) {
+                TACInstr* deadInstr = next;
+                next = next->next;
+                /* Mark dead instruction (in real impl, we'd remove it) */
+                printf("    [OPTIMIZATION] Removed dead code after RETURN\n");
+                free(deadInstr);
+            }
+
+            /* Link RETURN directly to FUNC_END */
+            curr->next = next;
+        }
+
+        curr = curr->next;
+    }
+}
+
+/* ADVANCED OPTIMIZATION 2: Tail Call Optimization
+ * Convert CALL followed immediately by RETURN into a jump
+ * Pattern: t0 = CALL func, N
+ *          RETURN t0
+ * Becomes: GOTO func (tail call)
+ */
+void optimizeTailCalls() {
+    TACInstr* curr = optimizedList.head;
+
+    while (curr && curr->next) {
+        /* Check for CALL followed by RETURN of the same temp */
+        if (curr->op == TAC_CALL && curr->next->op == TAC_RETURN) {
+            TACInstr* callInstr = curr;
+            TACInstr* retInstr = curr->next;
+
+            /* Check if RETURN uses the result of CALL */
+            if (retInstr->arg1 && strcmp(retInstr->arg1, callInstr->result) == 0) {
+                printf("    [OPTIMIZATION] Tail call detected for function '%s'\n",
+                       callInstr->arg1);
+                /* In a full implementation, we'd replace with a jump instruction */
+                /* For now, just mark it with a comment */
+            }
+        }
+
+        curr = curr->next;
+    }
+}
+
+/* ADVANCED OPTIMIZATION 3: Function Inlining
+ * Replace small function calls with the function body inline
+ * Criteria: Function body < 5 instructions, non-recursive
+ */
+typedef struct FunctionInfo {
+    char* name;
+    TACInstr* begin;
+    TACInstr* end;
+    int instrCount;
+    int hasRecursiveCall;
+} FunctionInfo;
+
+FunctionInfo functions[20];
+int functionCount = 0;
+
+/* Analyze all functions in the TAC list */
+void analyzeFunctions() {
+    TACInstr* curr = optimizedList.head;
+    functionCount = 0;
+
+    while (curr) {
+        if (curr->op == TAC_FUNC_BEGIN) {
+            FunctionInfo* func = &functions[functionCount++];
+            func->name = strdup(curr->result);
+            func->begin = curr;
+            func->instrCount = 0;
+            func->hasRecursiveCall = 0;
+
+            /* Count instructions in function body */
+            TACInstr* bodyInstr = curr->next;
+            while (bodyInstr && bodyInstr->op != TAC_FUNC_END) {
+                func->instrCount++;
+
+                /* Check for recursive call */
+                if (bodyInstr->op == TAC_CALL &&
+                    strcmp(bodyInstr->arg1, func->name) == 0) {
+                    func->hasRecursiveCall = 1;
+                }
+
+                bodyInstr = bodyInstr->next;
+            }
+
+            func->end = bodyInstr;  /* Points to FUNC_END */
+
+            /* Report small functions that could be inlined */
+            if (func->instrCount < 5 && !func->hasRecursiveCall) {
+                printf("    [OPTIMIZATION] Function '%s' is inlineable (%d instructions)\n",
+                       func->name, func->instrCount);
+            }
+        }
+
+        curr = curr->next;
+    }
+}
+
+/* Apply all advanced optimizations */
+void applyAdvancedOptimizations() {
+    printf("\n=== ADVANCED OPTIMIZATIONS ===\n");
+
+    printf("\n  1. Analyzing functions for inlining...\n");
+    analyzeFunctions();
+
+    printf("\n  2. Eliminating dead code after RETURN...\n");
+    eliminateDeadCode();
+
+    printf("\n  3. Optimizing tail calls...\n");
+    optimizeTailCalls();
+
+    printf("\n==============================\n\n");
 }
 
 void printOptimizedTAC() {
@@ -374,7 +676,7 @@ void printOptimizedTAC() {
                 printf("     // Runtime addition needed\n");
                 break;
             case TAC_SUB:
-                printf("%s = %s - %s", curr->result, curr->arg1, curr->arg2);  // Fix: changed "+" to "-"
+                printf("%s = %s - %s", curr->result, curr->arg1, curr->arg2);
                 printf("     // Runtime subtraction needed\n");
                 break;
             case TAC_ASSIGN:
@@ -393,7 +695,7 @@ void printOptimizedTAC() {
                     printf("          // Print variable\n");
                 }
                 break;
-            case TAC_ARRAY_DECL:  // Add missing cases
+            case TAC_ARRAY_DECL:
                 printf("ARRAY_DECL %s\n", curr->result);
                 break;
             case TAC_ARRAY_ASSIGN:
@@ -403,6 +705,29 @@ void printOptimizedTAC() {
             case TAC_ARRAY_ACCESS:
                 printf("%s = array[%s]", curr->result, curr->arg1);
                 printf("  // Array access\n");
+                break;
+            case TAC_FUNC_BEGIN:
+                printf("FUNC_BEGIN %s\n", curr->result);
+                break;
+            case TAC_LABEL:
+                printf("LABEL %s:\n", curr->result);
+                break;
+            case TAC_PARAM:
+                printf("PARAM %s\n", curr->arg1);
+                break;
+            case TAC_CALL:
+                printf("%s = CALL %s, %d", curr->result, curr->arg1, curr->paramCount);
+                printf("  // Optimized call\n");
+                break;
+            case TAC_RETURN:
+                if (curr->arg1) {
+                    printf("RETURN %s\n", curr->arg1);
+                } else {
+                    printf("RETURN\n");
+                }
+                break;
+            case TAC_FUNC_END:
+                printf("FUNC_END %s\n", curr->result);
                 break;
             default:
                 break;

@@ -45,7 +45,10 @@
      PRINT = 261,
      VAR = 262,
      STRING = 263,
-     STRING_LITERAL = 264
+     FUNCTION = 264,
+     RETURN = 265,
+     VOID = 266,
+     STRING_LITERAL = 267
    };
 #endif
 /* Tokens.  */
@@ -55,7 +58,10 @@
 #define PRINT 261
 #define VAR 262
 #define STRING 263
-#define STRING_LITERAL 264
+#define FUNCTION 264
+#define RETURN 265
+#define VOID 266
+#define STRING_LITERAL 267
 
 
 
@@ -69,7 +75,7 @@ typedef union YYSTYPE
     struct ASTNode* node;   /* For AST nodes */
 }
 /* Line 1529 of yacc.c.  */
-#line 73 "parser.tab.h"
+#line 79 "parser.tab.h"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1

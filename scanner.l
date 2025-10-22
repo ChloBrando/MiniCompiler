@@ -17,6 +17,8 @@
 "int"           { return INT; }
 "print"         { return PRINT; }
 "string"        { return STRING; }
+"return"        { return RETURN; }
+"void"          { return VOID; }
 
 [a-zA-Z_][a-zA-Z0-9_]* { 
     yylval.str = strdup(yytext);
@@ -51,8 +53,12 @@
 ")"             { return ')'; }
 "]"             { return ']'; }
 "["             { return '['; }
+","             { return ','; }
+"{"             { return '{'; }
+"}"             { return '}'; }
+"#"             { return FUNCTION; }
 
-
+"//".*          { /* Skip single-line comments */ }
 [ \t\n]         { }
 
 .               { printf("Lexical Error: Unknown character '%c'\n", *yytext); }

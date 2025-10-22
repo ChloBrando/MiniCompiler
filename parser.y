@@ -31,11 +31,11 @@ ASTNode* root = NULL;          /* Root of the Abstract Syntax Tree */
 /* TOKEN DECLARATIONS with their semantic value types */
 %token <num> NUM        /* Number token carries an integer value */
 %token <str> ID         /* Identifier token carries a string */
-%token INT PRINT VAR STRING        /* Keywords have no semantic value */
+%token INT PRINT VAR STRING FUNCTION RETURN VOID
 %token <str> STRING_LITERAL
 
 /* NON-TERMINAL TYPES - Define what type each grammar rule returns */
-%type <node> program stmt_list stmt decl assign expr print_stmt
+%type <node> program stmt_list stmt decl assign expr print_stmt func_decl param_list arg_list
 
 /* OPERATOR PRECEDENCE AND ASSOCIATIVITY */
 %left '+' '-' /* Addition is left-associative: a+b+c = (a+b)+c */
@@ -64,48 +64,28 @@ stmt_list:
     }
     ;
 
-/* STATEMENT TYPES - The three kinds of statements we support */
+/* STATEMENT TYPES - NOW INCLUDING FUNCTIONS */
 stmt:
     decl        /* Variable declaration */
     | assign    /* Assignment statement */
     | print_stmt /* Print statement */
+    | func_decl  /* Function declaration */
+    | expr ';'   /* Expression statement (for function calls) */
+    | RETURN expr ';' { $$ = createReturn($2); }  /* Return with value */
+    | RETURN ';'      { $$ = createReturn(NULL); } /* Return void */
     ;
 
 /* DECLARATION RULE - "int x;" and "int x[NUM];" */
 decl:
     INT ID ';' { 
-                /* Create an AST node for an integer declaration.
-                 * The lexer returned the identifier as a heap-allocated string
-                 * (yylval.str = strdup(yytext)) so the parser receives ownership
-                 * of that char* in $2. We pass the name into createDecl which
-                 * copies or stores the name as needed in the AST, and then we
-                 * free($2) here to avoid a temporary memory leak in the parser.
-                 *
-                 * Important: calling free() here does NOT "reserve stack space"
-                 * or allocate runtime memory for the variable. The parser only
-                 * builds the AST. Actual stack offsets and memory layout are
-                 * created later by the semantic pass (symtab) when we call
-                 * addVar/addArrayVar/addStringVar.
-                 */
                 $$ = createDecl($2);
                 free($2);
     }
   | INT ID '[' NUM ']' ';' { 
-                /* Build an AST node representing an array declaration.
-                 * The NUM value ($4) is a compile-time constant for the size.
-                 * The string $2 was allocated by the lexer and must be freed
-                 * after the parser copies or consumes it. Again, no runtime
-                 * memory is allocated here — this is purely syntactic AST work.
-                 */
                 $$ = createArrayDecl($2, $4);
                 free($2);
     }
   | STRING ID ';' {
-            /* String declaration: create AST node and free parser temp memory.
-             * createStrDecl only records the intention to declare a string;
-             * the semantic phase will actually register it in the symbol table
-             * and assign a stack offset for runtime storage of a pointer.
-             */
             $$ = createStrDecl($2);
             free($2);
     }
@@ -123,7 +103,6 @@ assign:
     }
   ;
 
-
 /* EXPRESSION RULES - Build expression trees */
 expr:
     NUM { 
@@ -136,13 +115,6 @@ expr:
         free($1);            /* Free the identifier string */
     }
     | STRING_LITERAL {
-        /* String literal: the lexer allocated a C string and put it in $1.
-         * createStringLit will create an AST node that typically copies
-         * the pointer into the node structure (or copies the contents).
-         * After creating the AST node we call free($1) to release the
-         * temporary buffer allocated by the lexer. The AST owns whatever
-         * it needs after this call.
-         */
         $$ = createStringLit($1);
         free($1);
     }
@@ -159,6 +131,16 @@ expr:
         $$ = createArrayAccess($1, $3);  /* $1=ID, $3=index expr */
         free($1);                         /* Free the identifier string */
     }
+    | ID '(' ')' { 
+        /* Function call with no arguments */
+        $$ = createFuncCall($1, NULL);
+        free($1);
+    }
+    | ID '(' arg_list ')' { 
+        /* Function call with arguments */
+        $$ = createFuncCall($1, $3);
+        free($1);
+    }
     ;
 
 /* PRINT STATEMENT - "print(expr);" */
@@ -166,6 +148,42 @@ print_stmt:
     PRINT '(' expr ')' ';' { 
         /* Create print node with expression to print */
         $$ = createPrint($3);  /* $3 is the expression inside parens */
+    }
+    ;
+
+/* FUNCTION DECLARATION - "# funcName() { ... }" */
+func_decl:
+    FUNCTION ID '(' ')' '{' stmt_list '}' {
+        /* Function with no parameters */
+        $$ = createFuncDecl($2, NULL, $6);
+        free($2);
+    }
+    | FUNCTION ID '(' param_list ')' '{' stmt_list '}' {
+        /* Function with parameters */
+        $$ = createFuncDecl($2, $4, $7);
+        free($2);
+    }
+    ;
+
+/* PARAMETER LIST - "int x" or "int x, int y, ..." */
+param_list:
+    INT ID {
+        $$ = createParam($2);
+        free($2);
+    }
+    | param_list ',' INT ID {
+        $$ = addParam($1, $4);
+        free($4);
+    }
+    ;
+
+/* ARGUMENT LIST - "expr" or "expr, expr, ..." */
+arg_list:
+    expr { 
+        $$ = $1; 
+    }
+    | arg_list ',' expr { 
+        $$ = createStmtList($1, $3);  /* Reuse stmt_list structure for args */
     }
     ;
 

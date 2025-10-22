@@ -111,6 +111,56 @@ ASTNode* createArrayAccess(char* name, ASTNode* index) {
     return node;
 }
 
+/* Create a function declaration node */
+ASTNode* createFuncDecl(char* name, ASTNode* params, ASTNode* body) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_FUNC_DECL;
+    node->data.funcDecl.name = strdup(name);
+    node->data.funcDecl.params = params;
+    node->data.funcDecl.body = body;
+    return node;
+}
+
+/* Create a parameter node */
+ASTNode* createParam(char* name) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_PARAM;
+    node->data.param.name = strdup(name);
+    node->data.param.next = NULL;
+    return node;
+}
+
+/* Add a parameter to the list */
+ASTNode* addParam(ASTNode* list, char* name) {
+    ASTNode* newParam = createParam(name);
+    if (!list) return newParam;
+    
+    /* Find the end of the list */
+    ASTNode* current = list;
+    while (current->data.param.next != NULL) {
+        current = current->data.param.next;
+    }
+    current->data.param.next = newParam;
+    return list;
+}
+
+/* Create a function call node */
+ASTNode* createFuncCall(char* name, ASTNode* args) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_FUNC_CALL;
+    node->data.funcCall.name = strdup(name);
+    node->data.funcCall.args = args;
+    return node;
+}
+
+/* Create a return statement node */
+ASTNode* createReturn(ASTNode* value) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_RETURN;
+    node->data.returnStmt.value = value;
+    return node;
+}
+
 /* Display the AST structure (for debugging and education) */
 void printAST(ASTNode* node, int level) {
     if (!node) return;
@@ -136,6 +186,9 @@ void printAST(ASTNode* node, int level) {
             break;
         case NODE_DECL:
             printf("DECL: %s\n", node->data.name);
+            break;
+        case NODE_STR_DECL:
+            printf("STR_DECL: %s\n", node->data.name);
             break;
         case NODE_ASSIGN:
             printf("ASSIGN: %s\n", node->data.assign.var);
@@ -168,6 +221,38 @@ void printAST(ASTNode* node, int level) {
             printf("%*sARRAY_ACCESS: %s[]\n", level*2, "", node->data.arrayAccess.name);
             printf("%*sIndex:\n", level*2, "");
             printAST(node->data.arrayAccess.index, level+1);
+            break;
+
+        case NODE_FUNC_DECL:
+            printf("FUNC_DECL: %s\n", node->data.funcDecl.name);
+            if (node->data.funcDecl.params) {
+                printf("%*sParameters:\n", (level+1)*2, "");
+                printAST(node->data.funcDecl.params, level+2);
+            }
+            printf("%*sBody:\n", (level+1)*2, "");
+            printAST(node->data.funcDecl.body, level+2);
+            break;
+
+        case NODE_PARAM:
+            printf("PARAM: %s\n", node->data.param.name);
+            if (node->data.param.next) {
+                printAST(node->data.param.next, level);
+            }
+            break;
+
+        case NODE_FUNC_CALL:
+            printf("FUNC_CALL: %s\n", node->data.funcCall.name);
+            if (node->data.funcCall.args) {
+                printf("%*sArguments:\n", (level+1)*2, "");
+                printAST(node->data.funcCall.args, level+2);
+            }
+            break;
+
+        case NODE_RETURN:
+            printf("RETURN\n");
+            if (node->data.returnStmt.value) {
+                printAST(node->data.returnStmt.value, level+1);
+            }
             break;
     }
 }

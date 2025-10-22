@@ -18,7 +18,13 @@ typedef enum {
     TAC_DECL,     /* Declaration: declare result */
     TAC_ARRAY_DECL,    /* Array declaration: declare array[size] */
     TAC_ARRAY_ASSIGN,  /* Array assignment: array[index] = value */
-    TAC_ARRAY_ACCESS   /* Array access: temp = array[index] */
+    TAC_ARRAY_ACCESS,   /* Array access: temp = array[index] */
+    TAC_LABEL,          /* Function entry point: LABEL func_name */
+    TAC_PARAM,          /* Pass parameter: PARAM arg */
+    TAC_CALL,           /* Function call: result = CALL func_name, num_params */
+    TAC_RETURN,         /* Return value: RETURN value */
+    TAC_FUNC_BEGIN,     /* Mark function start: FUNC_BEGIN name */
+    TAC_FUNC_END        /* Mark function end: FUNC_END name */
 } TACOp;
 
 /* TAC INSTRUCTION STRUCTURE */
@@ -27,6 +33,7 @@ typedef struct TACInstr {
     char* arg1;             /* First operand (if needed) */
     char* arg2;             /* Second operand (for binary ops) */
     char* result;           /* Result/destination */
+    int paramCount;  // For CALL instruction: number of params
     struct TACInstr* next;  /* Linked list pointer */
 } TACInstr;
 
@@ -49,5 +56,6 @@ char* generateTACExpr(ASTNode* node);                             /* Generate TA
 void printTAC();                                                   /* Display unoptimized TAC */
 void optimizeTAC();                                                /* Apply optimizations */
 void printOptimizedTAC();                                          /* Display optimized TAC */
+void applyAdvancedOptimizations();                                 /* Apply advanced optimizations */
 
 #endif

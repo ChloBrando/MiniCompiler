@@ -56,6 +56,11 @@ int exprType(ASTNode* node) {
             }
             return -1;
         }
+        case NODE_FUNC_CALL: {
+            /* Function calls always return int for now */
+            /* In a full implementation, you'd look up the function's return type */
+            return TYPE_INT;
+        }
         default:
             return -1;
     }
@@ -136,6 +141,49 @@ int checkStmt(ASTNode* node) {
                 fprintf(stderr, "Semantic Error: array value must be integer\n");
                 return -1;
             }
+            return 0;
+        }
+        case NODE_FUNC_DECL: {
+            /* Add function to symbol table */
+            int result = addFunction(node->data.funcDecl.name, "int", NULL, 0);
+            if (result == -1) {
+                fprintf(stderr, "Semantic Error: function '%s' already declared\n", node->data.funcDecl.name);
+                return -1;
+            }
+
+            /* Enter new scope for function body */
+            enterScope();
+
+            /* Add parameters to the new scope */
+            ASTNode* param = node->data.funcDecl.params;
+            while (param) {
+                int paramOffset = addParameter(param->data.param.name, "int");
+                if (paramOffset == -1) {
+                    fprintf(stderr, "Semantic Error: duplicate parameter '%s'\n", param->data.param.name);
+                    exitScope();
+                    return -1;
+                }
+                param = param->data.param.next;
+            }
+
+            /* Check function body */
+            int bodyResult = checkStmt(node->data.funcDecl.body);
+
+            /* Exit function scope */
+            exitScope();
+
+            return bodyResult;
+        }
+        case NODE_RETURN: {
+            /* Check return expression type */
+            if (node->data.expr) {
+                int t = exprType(node->data.expr);
+                if (t == -1) return -1;
+            }
+            return 0;
+        }
+        case NODE_PARAM: {
+            /* Parameters are handled in NODE_FUNC_DECL */
             return 0;
         }
         default:
