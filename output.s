@@ -1,30 +1,8 @@
 .data
-str_literal_0: .asciiz "===== FUNCTION TESTS ====="
-str_literal_1: .asciiz "Test 1: getConstant()"
-str_literal_2: .asciiz "Result: "
-str_literal_3: .asciiz "Expected: 42"
-str_literal_4: .asciiz "Test 2: double(7)"
-str_literal_5: .asciiz "Expected: 14"
-str_literal_6: .asciiz "Test 3: addTwo(5, 3)"
-str_literal_7: .asciiz "Expected: 8"
-str_literal_8: .asciiz "Test 4: addThree(1, 2, 3)"
-str_literal_9: .asciiz "Expected: 6"
-str_literal_10: .asciiz "Test 5: compute(5, 10)"
-str_literal_11: .asciiz "Expected: 20"
-str_literal_12: .asciiz "Test 6: testScope(50)"
-str_literal_13: .asciiz "Expected: 60"
-str_literal_14: .asciiz "Global x still: "
-str_literal_15: .asciiz "Expected: 100"
-str_literal_16: .asciiz "Test 7: getFive()"
-str_literal_17: .asciiz "Expected: 5"
-str_literal_18: .asciiz "Test 8: addTwo(getFive(), double(3))"
-str_literal_19: .asciiz "Expected: 11"
-str_literal_20: .asciiz "Test 9: Arrays with functions"
-str_literal_21: .asciiz "arr[0]: "
-str_literal_22: .asciiz "arr[1]: "
-str_literal_23: .asciiz "arr[2]: "
-str_literal_24: .asciiz "Expected: 5, 8, 13"
-str_literal_25: .asciiz "===== ALL TESTS COMPLETE ====="
+str_literal_0: .asciiz "=== Simple Test ==="
+str_literal_1: .asciiz "Hello"
+str_literal_2: .asciiz "=== Done ==="
+float_literal_0: .float 3.140000
 
 .text
 .globl main
@@ -34,204 +12,36 @@ main:
     j main_code        # Jump to main program
 
 
-# Function: getConstant
-getConstant:
+# Function: addNums
+addNums:
     # Function prologue
     addi $sp, $sp, -32    # Allocate stack frame
     sw $ra, 28($sp)      # Save return address
     sw $fp, 24($sp)      # Save frame pointer
     move $fp, $sp        # Set new frame pointer
     # Store parameters
+    sw $a0, 0($sp)     # Store param 'a'
+    sw $a1, 4($sp)     # Store param 'b'
     # Function body
-    # Declared value at offset 0
-    li $t0, 42
-    sw $t0, 0($sp)
     # Return statement
     lw $t0, 0($sp)
-    move $v0, $t0       # Set return value
-    lw $fp, 24($sp)      # Restore frame pointer
-    lw $ra, 28($sp)      # Restore return address
-    addi $sp, $sp, 32    # Deallocate stack frame
-    jr $ra               # Return to caller
-    # Function epilogue (default return)
-getConstant_return:
-    lw $fp, 24($sp)      # Restore frame pointer
-    lw $ra, 28($sp)      # Restore return address
-    addi $sp, $sp, 32    # Deallocate stack frame
-    jr $ra               # Return to caller
-
-# Function: double
-double:
-    # Function prologue
-    addi $sp, $sp, -32    # Allocate stack frame
-    sw $ra, 28($sp)      # Save return address
-    sw $fp, 24($sp)      # Save frame pointer
-    move $fp, $sp        # Set new frame pointer
-    # Store parameters
-    sw $a0, 0($sp)     # Store param 'x'
-    # Function body
-    # Declared result at offset 4
-    lw $t1, 0($sp)
-    lw $t2, 0($sp)
-    # Addition
-    add $t1, $t1, $t2
-    sw $t1, 4($sp)
-    # Return statement
-    lw $t0, 4($sp)
-    move $v0, $t0       # Set return value
-    lw $fp, 24($sp)      # Restore frame pointer
-    lw $ra, 28($sp)      # Restore return address
-    addi $sp, $sp, 32    # Deallocate stack frame
-    jr $ra               # Return to caller
-    # Function epilogue (default return)
-double_return:
-    lw $fp, 24($sp)      # Restore frame pointer
-    lw $ra, 28($sp)      # Restore return address
-    addi $sp, $sp, 32    # Deallocate stack frame
-    jr $ra               # Return to caller
-
-# Function: addTwo
-addTwo:
-    # Function prologue
-    addi $sp, $sp, -32    # Allocate stack frame
-    sw $ra, 28($sp)      # Save return address
-    sw $fp, 24($sp)      # Save frame pointer
-    move $fp, $sp        # Set new frame pointer
-    # Store parameters
-    sw $a0, 0($sp)     # Store param 'a'
-    sw $a1, 4($sp)     # Store param 'b'
-    # Function body
-    # Declared sum at offset 8
-    lw $t1, 0($sp)
-    lw $t2, 4($sp)
-    # Addition
-    add $t1, $t1, $t2
-    sw $t1, 8($sp)
-    # Return statement
-    lw $t0, 8($sp)
-    move $v0, $t0       # Set return value
-    lw $fp, 24($sp)      # Restore frame pointer
-    lw $ra, 28($sp)      # Restore return address
-    addi $sp, $sp, 32    # Deallocate stack frame
-    jr $ra               # Return to caller
-    # Function epilogue (default return)
-addTwo_return:
-    lw $fp, 24($sp)      # Restore frame pointer
-    lw $ra, 28($sp)      # Restore return address
-    addi $sp, $sp, 32    # Deallocate stack frame
-    jr $ra               # Return to caller
-
-# Function: addThree
-addThree:
-    # Function prologue
-    addi $sp, $sp, -32    # Allocate stack frame
-    sw $ra, 28($sp)      # Save return address
-    sw $fp, 24($sp)      # Save frame pointer
-    move $fp, $sp        # Set new frame pointer
-    # Store parameters
-    sw $a0, 0($sp)     # Store param 'x'
-    sw $a1, 4($sp)     # Store param 'y'
-    sw $a2, 8($sp)     # Store param 'z'
-    # Function body
-    # Declared temp at offset 12
-    # Declared result at offset 16
-    lw $t1, 0($sp)
-    lw $t2, 4($sp)
-    # Addition
-    add $t1, $t1, $t2
-    sw $t1, 12($sp)
-    lw $t0, 12($sp)
-    lw $t1, 8($sp)
+    lw $t1, 4($sp)
     # Addition
     add $t0, $t0, $t1
-    sw $t0, 16($sp)
-    # Return statement
-    lw $t0, 16($sp)
     move $v0, $t0       # Set return value
     lw $fp, 24($sp)      # Restore frame pointer
     lw $ra, 28($sp)      # Restore return address
     addi $sp, $sp, 32    # Deallocate stack frame
     jr $ra               # Return to caller
     # Function epilogue (default return)
-addThree_return:
+addNums_return:
     lw $fp, 24($sp)      # Restore frame pointer
     lw $ra, 28($sp)      # Restore return address
     addi $sp, $sp, 32    # Deallocate stack frame
     jr $ra               # Return to caller
 
-# Function: compute
-compute:
-    # Function prologue
-    addi $sp, $sp, -32    # Allocate stack frame
-    sw $ra, 28($sp)      # Save return address
-    sw $fp, 24($sp)      # Save frame pointer
-    move $fp, $sp        # Set new frame pointer
-    # Store parameters
-    sw $a0, 0($sp)     # Store param 'a'
-    sw $a1, 4($sp)     # Store param 'b'
-    # Function body
-    # Declared doubled at offset 8
-    # Declared added at offset 12
-    # Function call: double
-    lw $t1, 0($sp)
-    move $a0, $t1    # Arg 0
-    jal double             # Call function
-    move $t2, $v0      # Get return value
-    sw $t2, 8($sp)
-    # Function call: addTwo
-    lw $t0, 8($sp)
-    move $a0, $t0    # Arg 0
-    lw $t1, 4($sp)
-    move $a1, $t1    # Arg 1
-    jal addTwo             # Call function
-    move $t2, $v0      # Get return value
-    sw $t2, 12($sp)
-    # Return statement
-    lw $t0, 12($sp)
-    move $v0, $t0       # Set return value
-    lw $fp, 24($sp)      # Restore frame pointer
-    lw $ra, 28($sp)      # Restore return address
-    addi $sp, $sp, 32    # Deallocate stack frame
-    jr $ra               # Return to caller
-    # Function epilogue (default return)
-compute_return:
-    lw $fp, 24($sp)      # Restore frame pointer
-    lw $ra, 28($sp)      # Restore return address
-    addi $sp, $sp, 32    # Deallocate stack frame
-    jr $ra               # Return to caller
-
-# Function: testScope
-testScope:
-    # Function prologue
-    addi $sp, $sp, -32    # Allocate stack frame
-    sw $ra, 28($sp)      # Save return address
-    sw $fp, 24($sp)      # Save frame pointer
-    move $fp, $sp        # Set new frame pointer
-    # Store parameters
-    sw $a0, 0($sp)     # Store param 'x'
-    # Function body
-    # Declared y at offset 4
-    lw $t1, 0($sp)
-    li $t2, 10
-    # Addition
-    add $t1, $t1, $t2
-    sw $t1, 4($sp)
-    # Return statement
-    lw $t0, 4($sp)
-    move $v0, $t0       # Set return value
-    lw $fp, 24($sp)      # Restore frame pointer
-    lw $ra, 28($sp)      # Restore return address
-    addi $sp, $sp, 32    # Deallocate stack frame
-    jr $ra               # Return to caller
-    # Function epilogue (default return)
-testScope_return:
-    lw $fp, 24($sp)      # Restore frame pointer
-    lw $ra, 28($sp)      # Restore return address
-    addi $sp, $sp, 32    # Deallocate stack frame
-    jr $ra               # Return to caller
-
-# Function: getFive
-getFive:
+# Function: return5
+return5:
     # Function prologue
     addi $sp, $sp, -32    # Allocate stack frame
     sw $ra, 28($sp)      # Save return address
@@ -247,221 +57,103 @@ getFive:
     addi $sp, $sp, 32    # Deallocate stack frame
     jr $ra               # Return to caller
     # Function epilogue (default return)
-getFive_return:
+return5_return:
     lw $fp, 24($sp)      # Restore frame pointer
     lw $ra, 28($sp)      # Restore return address
     addi $sp, $sp, 32    # Deallocate stack frame
     jr $ra               # Return to caller
 
 main_code:
-    # Declared x at offset 0
-    li $t2, 100
-    sw $t2, 0($sp)
     # load address of string literal
-    la $t0, str_literal_0
+    la $t2, str_literal_0
     # Print string expression
-    move $a0, $t0
+    move $a0, $t2
     li $v0, 4
     syscall
     li $v0, 11
     li $a0, 10
     syscall
+    # Declared x at offset 0
+    li $t0, 10
+    sw $t0, 0($sp)
+    lw $t0, 0($sp)
+    # Print integer (expr)
+    move $a0, $t0
+    li $v0, 1
+    syscall
+    li $v0, 11
+    li $a0, 10
+    syscall
+    # Declared float y at offset 4
+    # Load float literal 3.140000
+    la $t0, float_literal_0
+    lwc1 $f0, 0($t0)
+    swc1 $f0, 4($sp)
+    lwc1 $f0, 4($sp)
+    # Print float
+    mov.s $f12, $f0
+    li $v0, 2
+    syscall
+    li $v0, 11
+    li $a0, 10
+    syscall
+    # Declared string s at offset 8
     # load address of string literal
     la $t0, str_literal_1
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # Declared const at offset 4
-    # Function call: getConstant
-    jal getConstant             # Call function
-    move $t0, $v0      # Get return value
-    sw $t0, 4($sp)
-    # load address of string literal
-    la $t0, str_literal_2
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    lw $t0, 4($sp)
-    # Print integer (expr)
-    move $a0, $t0
-    li $v0, 1
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # load address of string literal
-    la $t0, str_literal_3
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # load address of string literal
-    la $t0, str_literal_4
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # Declared doubled at offset 8
-    # Function call: double
-    li $t0, 7
-    move $a0, $t0    # Arg 0
-    jal double             # Call function
-    move $t1, $v0      # Get return value
-    sw $t1, 8($sp)
-    # load address of string literal
-    la $t0, str_literal_2
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
+    sw $t0, 8($sp)
     lw $t0, 8($sp)
+    # Print string variable s
+    lw $a0, 8($sp)
+    li $v0, 4
+    syscall
+    li $v0, 11
+    li $a0, 10
+    syscall
+    # Declared array arr[2] at offset 12
+    li $t0, 0
+    li $t1, 5
+    # Array assignment: arr[index] = value
+    sll $t0, $t0, 2    # index * 4
+    addi $t2, $sp, 12   # base address
+    add $t2, $t2, $t0 # element address
+    sw $t1, 0($t2)     # store value
+    li $t0, 1
+    li $t1, 0
+    # Array access: arr[index]
+    sll $t1, $t1, 2    # index * 4
+    addi $t2, $sp, 12   # base address
+    add $t2, $t2, $t1 # element address
+    lw $t2, 0($t2)     # load value
+    li $t3, 3
+    # Addition
+    add $t2, $t2, $t3
+    # Array assignment: arr[index] = value
+    sll $t0, $t0, 2    # index * 4
+    addi $t3, $sp, 12   # base address
+    add $t3, $t3, $t0 # element address
+    sw $t2, 0($t3)     # store value
+    li $t0, 1
+    # Array access: arr[index]
+    sll $t0, $t0, 2    # index * 4
+    addi $t1, $sp, 12   # base address
+    add $t1, $t1, $t0 # element address
+    lw $t1, 0($t1)     # load value
     # Print integer (expr)
-    move $a0, $t0
+    move $a0, $t1
     li $v0, 1
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # load address of string literal
-    la $t0, str_literal_5
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # load address of string literal
-    la $t0, str_literal_6
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # Declared sum at offset 12
-    # Function call: addTwo
-    li $t0, 5
-    move $a0, $t0    # Arg 0
-    li $t1, 3
-    move $a1, $t1    # Arg 1
-    jal addTwo             # Call function
-    move $t2, $v0      # Get return value
-    sw $t2, 12($sp)
-    # load address of string literal
-    la $t0, str_literal_2
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    lw $t0, 12($sp)
-    # Print integer (expr)
-    move $a0, $t0
-    li $v0, 1
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # load address of string literal
-    la $t0, str_literal_7
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # load address of string literal
-    la $t0, str_literal_8
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # Declared sum3 at offset 16
-    # Function call: addThree
-    move $a0, $t0    # Arg 0
-    li $t0, 3
-    move $a1, $t0    # Arg 1
-    jal addThree             # Call function
-    move $t1, $v0      # Get return value
-    sw $t1, 16($sp)
-    # load address of string literal
-    la $t0, str_literal_2
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    lw $t0, 16($sp)
-    # Print integer (expr)
-    move $a0, $t0
-    li $v0, 1
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # load address of string literal
-    la $t0, str_literal_9
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # load address of string literal
-    la $t0, str_literal_10
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
     syscall
     li $v0, 11
     li $a0, 10
     syscall
     # Declared result at offset 20
-    # Function call: compute
-    li $t0, 5
+    # Function call: addNums
+    li $t0, 4
     move $a0, $t0    # Arg 0
-    li $t1, 10
+    li $t1, 6
     move $a1, $t1    # Arg 1
-    jal compute             # Call function
+    jal addNums             # Call function
     move $t2, $v0      # Get return value
     sw $t2, 20($sp)
-    # load address of string literal
-    la $t0, str_literal_2
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
     lw $t0, 20($sp)
     # Print integer (expr)
     move $a0, $t0
@@ -470,40 +162,11 @@ main_code:
     li $v0, 11
     li $a0, 10
     syscall
-    # load address of string literal
-    la $t0, str_literal_11
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # load address of string literal
-    la $t0, str_literal_12
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # Declared scoped at offset 24
-    # Function call: testScope
-    li $t0, 50
-    move $a0, $t0    # Arg 0
-    jal testScope             # Call function
-    move $t1, $v0      # Get return value
-    sw $t1, 24($sp)
-    # load address of string literal
-    la $t0, str_literal_2
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
+    # Declared five at offset 24
+    # Function call: return5
+    jal return5             # Call function
+    move $t0, $v0      # Get return value
+    sw $t0, 24($sp)
     lw $t0, 24($sp)
     # Print integer (expr)
     move $a0, $t0
@@ -513,260 +176,7 @@ main_code:
     li $a0, 10
     syscall
     # load address of string literal
-    la $t0, str_literal_13
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # load address of string literal
-    la $t0, str_literal_14
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    lw $t0, 0($sp)
-    # Print integer (expr)
-    move $a0, $t0
-    li $v0, 1
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # load address of string literal
-    la $t0, str_literal_15
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # load address of string literal
-    la $t0, str_literal_16
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # Declared five at offset 28
-    # Function call: getFive
-    jal getFive             # Call function
-    move $t0, $v0      # Get return value
-    sw $t0, 28($sp)
-    # load address of string literal
     la $t0, str_literal_2
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    lw $t0, 28($sp)
-    # Print integer (expr)
-    move $a0, $t0
-    li $v0, 1
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # load address of string literal
-    la $t0, str_literal_17
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # load address of string literal
-    la $t0, str_literal_18
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # Declared complex at offset 32
-    # Function call: addTwo
-    # Function call: getFive
-    jal getFive             # Call function
-    move $t0, $v0      # Get return value
-    move $a0, $t0    # Arg 0
-    # Function call: double
-    li $t1, 3
-    move $a0, $t1    # Arg 0
-    jal double             # Call function
-    move $t2, $v0      # Get return value
-    move $a1, $t2    # Arg 1
-    jal addTwo             # Call function
-    move $t3, $v0      # Get return value
-    sw $t3, 32($sp)
-    # load address of string literal
-    la $t0, str_literal_2
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    lw $t0, 32($sp)
-    # Print integer (expr)
-    move $a0, $t0
-    li $v0, 1
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # load address of string literal
-    la $t0, str_literal_19
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # load address of string literal
-    la $t0, str_literal_20
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # Declared array arr[3] at offset 36
-    li $t0, 0
-    # Function call: getFive
-    jal getFive             # Call function
-    move $t1, $v0      # Get return value
-    # Array assignment: arr[index] = value
-    sll $t0, $t0, 2    # index * 4
-    addi $t2, $sp, 36   # base address
-    add $t2, $t2, $t0 # element address
-    sw $t1, 0($t2)     # store value
-    li $t0, 1
-    # Function call: double
-    li $t1, 4
-    move $a0, $t1    # Arg 0
-    jal double             # Call function
-    move $t2, $v0      # Get return value
-    # Array assignment: arr[index] = value
-    sll $t0, $t0, 2    # index * 4
-    addi $t3, $sp, 36   # base address
-    add $t3, $t3, $t0 # element address
-    sw $t2, 0($t3)     # store value
-    li $t0, 2
-    # Function call: addTwo
-    li $t1, 0
-    # Array access: arr[index]
-    sll $t1, $t1, 2    # index * 4
-    addi $t2, $sp, 36   # base address
-    add $t2, $t2, $t1 # element address
-    lw $t2, 0($t2)     # load value
-    move $a0, $t2    # Arg 0
-    li $t3, 1
-    # Array access: arr[index]
-    sll $t3, $t3, 2    # index * 4
-    addi $t4, $sp, 36   # base address
-    add $t4, $t4, $t3 # element address
-    lw $t4, 0($t4)     # load value
-    move $a1, $t4    # Arg 1
-    jal addTwo             # Call function
-    move $t5, $v0      # Get return value
-    # Array assignment: arr[index] = value
-    sll $t0, $t0, 2    # index * 4
-    addi $t6, $sp, 36   # base address
-    add $t6, $t6, $t0 # element address
-    sw $t5, 0($t6)     # store value
-    # load address of string literal
-    la $t0, str_literal_21
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    li $t0, 0
-    # Array access: arr[index]
-    sll $t0, $t0, 2    # index * 4
-    addi $t1, $sp, 36   # base address
-    add $t1, $t1, $t0 # element address
-    lw $t1, 0($t1)     # load value
-    # Print integer (expr)
-    move $a0, $t1
-    li $v0, 1
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # load address of string literal
-    la $t0, str_literal_22
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    li $t0, 1
-    # Array access: arr[index]
-    sll $t0, $t0, 2    # index * 4
-    addi $t1, $sp, 36   # base address
-    add $t1, $t1, $t0 # element address
-    lw $t1, 0($t1)     # load value
-    # Print integer (expr)
-    move $a0, $t1
-    li $v0, 1
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # load address of string literal
-    la $t0, str_literal_23
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    li $t0, 2
-    # Array access: arr[index]
-    sll $t0, $t0, 2    # index * 4
-    addi $t1, $sp, 36   # base address
-    add $t1, $t1, $t0 # element address
-    lw $t1, 0($t1)     # load value
-    # Print integer (expr)
-    move $a0, $t1
-    li $v0, 1
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # load address of string literal
-    la $t0, str_literal_24
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # load address of string literal
-    la $t0, str_literal_25
     # Print string expression
     move $a0, $t0
     li $v0, 4

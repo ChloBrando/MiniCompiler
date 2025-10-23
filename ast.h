@@ -10,8 +10,10 @@
 /* NODE TYPES - Different kinds of AST nodes in our language */
 typedef enum {
     NODE_NUM,       /* Numeric literal (e.g., 42) */
+    NODE_FLOAT,     /* Float literal (e.g., 3.14) */
     NODE_STR,       /* String literal (e.g., "hello") */
     NODE_STR_DECL,  /* String variable declaration (e.g., string s;) */
+    NODE_FLOAT_DECL, /* Float variable declaration (e.g., float x;) */
     NODE_VAR,       /* Variable reference (e.g., x) */
     NODE_BINOP,     /* Binary operation (e.g., x + y) */
     NODE_DECL,      /* Variable declaration (e.g., int x) */
@@ -38,8 +40,12 @@ typedef struct ASTNode {
     union {
         /* Literal number value (NODE_NUM) */
         int num;
-    /* String literal value (NODE_STR) */
-    char* str;
+
+        /* Literal float value (NODE_FLOAT) */
+        float fnum;
+
+        /* String literal value (NODE_STR) */
+        char* str;
         
         /* Variable or declaration name (NODE_VAR, NODE_DECL) */
         char* name;
@@ -95,6 +101,7 @@ typedef struct ASTNode {
         /* Parameter structure (NODE_PARAM) */
         struct {
             char* name;                     /* Parameter name */
+            char* type;                     /* Parameter type: "int" or "float" */
             struct ASTNode* next;           /* Next parameter */
         } param;
 
@@ -115,10 +122,12 @@ typedef struct ASTNode {
  * These functions are called by the parser to build the tree
  */
 ASTNode* createNum(int value);                                   /* Create number node */
+ASTNode* createFloatNum(float value);                            /* Create float number node */
 ASTNode* createVar(char* name);                                  /* Create variable node */
 ASTNode* createBinOp(char op, ASTNode* left, ASTNode* right);   /* Create binary op node */
 ASTNode* createStringLit(char* s);                               /* Create string literal node */
 ASTNode* createDecl(char* name);                                /* Create declaration node */
+ASTNode* createFloatDecl(char* name);                           /* Create float declaration node */
 ASTNode* createStrDecl(char* name);                             /* Create string declaration node */
 /* Add new functions here*/
 ASTNode* createAssign(char* var, ASTNode* value);               /* Create assignment node */
@@ -131,8 +140,8 @@ ASTNode* createArrayAccess(char* name, ASTNode* index);          /* Create array
 
 /* Function-related AST construction functions */
 ASTNode* createFuncDecl(char* name, ASTNode* params, ASTNode* body); /* Create function declaration node */
-ASTNode* createParam(char* name);                                /* Create parameter node */
-ASTNode* addParam(ASTNode* list, char* name);                    /* Add parameter to list */
+ASTNode* createParam(char* name, char* type);                    /* Create parameter node */
+ASTNode* addParam(ASTNode* list, char* name, char* type);        /* Add parameter to list */
 ASTNode* createFuncCall(char* name, ASTNode* args);              /* Create function call node */
 ASTNode* createReturn(ASTNode* value);                           /* Create return statement node */
 

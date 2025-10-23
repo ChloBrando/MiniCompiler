@@ -9,12 +9,14 @@
 #include "semantic.h"
 #include "symtab.h"
 
-/* Forward: compute type of expression; returns TYPE_INT, TYPE_STRING, or -1 on error */
+/* Forward: compute type of expression; returns TYPE_INT, TYPE_STRING, TYPE_FLOAT, or -1 on error */
 int exprType(ASTNode* node) {
     if (!node) return -1;
     switch (node->type) {
         case NODE_NUM:
             return TYPE_INT;
+        case NODE_FLOAT:
+            return TYPE_FLOAT;
         case NODE_STR:
             return TYPE_STRING;
         case NODE_VAR: {
@@ -24,6 +26,7 @@ int exprType(ASTNode* node) {
                 return -1;
             }
             if (isStringVar(node->data.name)) return TYPE_STRING;
+            if (isFloatVar(node->data.name)) return TYPE_FLOAT;
             if (isArrayVar(node->data.name)) return TYPE_ARRAY_INT;
             return TYPE_INT;
         }
@@ -44,14 +47,19 @@ int exprType(ASTNode* node) {
             int rt = exprType(node->data.binop.right);
             if (lt == -1 || rt == -1) return -1;
             if (node->data.binop.op == '+') {
-                /* allow int+int -> int, string+string -> string */
+                /* allow int+int -> int, float+float -> float, int+float -> float, string+string -> string */
                 if (lt == TYPE_INT && rt == TYPE_INT) return TYPE_INT;
+                if (lt == TYPE_FLOAT && rt == TYPE_FLOAT) return TYPE_FLOAT;
+                if ((lt == TYPE_INT && rt == TYPE_FLOAT) || (lt == TYPE_FLOAT && rt == TYPE_INT)) return TYPE_FLOAT;
                 if ((lt == TYPE_STRING || lt == TYPE_ARRAY_INT) && (rt == TYPE_STRING || rt == TYPE_ARRAY_INT)) return TYPE_STRING;
                 fprintf(stderr, "Semantic Error: incompatible types for '+' (left=%d right=%d)\n", lt, rt);
                 return -1;
             } else if (node->data.binop.op == '-') {
+                /* allow int-int -> int, float-float -> float, int-float -> float */
                 if (lt == TYPE_INT && rt == TYPE_INT) return TYPE_INT;
-                fprintf(stderr, "Semantic Error: '-' requires integer operands\n");
+                if (lt == TYPE_FLOAT && rt == TYPE_FLOAT) return TYPE_FLOAT;
+                if ((lt == TYPE_INT && rt == TYPE_FLOAT) || (lt == TYPE_FLOAT && rt == TYPE_INT)) return TYPE_FLOAT;
+                fprintf(stderr, "Semantic Error: '-' requires numeric operands\n");
                 return -1;
             }
             return -1;
@@ -72,6 +80,14 @@ int checkStmt(ASTNode* node) {
     switch (node->type) {
         case NODE_DECL: {
             int off = addVar(node->data.name);
+            if (off == -1) {
+                fprintf(stderr, "Semantic Error: variable '%s' already declared\n", node->data.name);
+                return -1;
+            }
+            return 0;
+        }
+        case NODE_FLOAT_DECL: {
+            int off = addFloatVar(node->data.name);
             if (off == -1) {
                 fprintf(stderr, "Semantic Error: variable '%s' already declared\n", node->data.name);
                 return -1;
@@ -100,12 +116,23 @@ int checkStmt(ASTNode* node) {
                 fprintf(stderr, "Semantic Error: variable '%s' not declared\n", node->data.assign.var);
                 return -1;
             }
-            int ltype = isStringVar(node->data.assign.var) ? TYPE_STRING : (isArrayVar(node->data.assign.var) ? TYPE_ARRAY_INT : TYPE_INT);
+            int ltype = isStringVar(node->data.assign.var) ? TYPE_STRING :
+                        (isFloatVar(node->data.assign.var) ? TYPE_FLOAT :
+                        (isArrayVar(node->data.assign.var) ? TYPE_ARRAY_INT : TYPE_INT));
             int rtype = exprType(node->data.assign.value);
             if (rtype == -1) return -1;
+
+            /* Type compatibility checking */
             if (ltype == TYPE_INT && rtype != TYPE_INT) {
                 fprintf(stderr, "Semantic Error: cannot assign non-int to int variable '%s'\n", node->data.assign.var);
                 return -1;
+            }
+            if (ltype == TYPE_FLOAT) {
+                /* Allow int->float implicit conversion, but not string */
+                if (rtype != TYPE_FLOAT && rtype != TYPE_INT) {
+                    fprintf(stderr, "Semantic Error: cannot assign non-numeric to float variable '%s'\n", node->data.assign.var);
+                    return -1;
+                }
             }
             if (ltype == TYPE_STRING && rtype != TYPE_STRING) {
                 fprintf(stderr, "Semantic Error: cannot assign non-string to string variable '%s'\n", node->data.assign.var);
@@ -157,7 +184,7 @@ int checkStmt(ASTNode* node) {
             /* Add parameters to the new scope */
             ASTNode* param = node->data.funcDecl.params;
             while (param) {
-                int paramOffset = addParameter(param->data.param.name, "int");
+                int paramOffset = addParameter(param->data.param.name, param->data.param.type);
                 if (paramOffset == -1) {
                     fprintf(stderr, "Semantic Error: duplicate parameter '%s'\n", param->data.param.name);
                     exitScope();

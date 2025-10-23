@@ -833,6 +833,432 @@ func:
 
 ---
 
+# ARRAYS IN THE COMPILER
+
+## Array Declaration
+
+Arrays are contiguous blocks of memory on the stack.
+
+### Example: `int arr[5];`
+
+**Symbol Table Entry:**
+```c
+Symbol {
+    name: "arr"
+    offset: 0           // Starting address on stack
+    type: TYPE_INT
+    isArray: 1
+    arraySize: 5        // 5 elements
+}
+```
+
+**Memory Layout:**
+```
+Stack:
+    $sp + 0  → arr[0]
+    $sp + 4  → arr[1]
+    $sp + 8  → arr[2]
+    $sp + 12 → arr[3]
+    $sp + 16 → arr[4]
+```
+
+Each integer is 4 bytes (1 word), so array takes 5 × 4 = 20 bytes.
+
+## Array Access
+
+### Read: `x = arr[2]`
+
+**TAC:**
+```
+1: t0 = array[2]       // Array access
+2: x = t0              // Assignment
+```
+
+**MIPS:**
+```assembly
+# Calculate element address
+li $t0, 2              # Index = 2
+sll $t0, $t0, 2        # Multiply by 4: 2 * 4 = 8 (byte offset)
+addi $t1, $sp, 0       # Base address of arr
+add $t1, $t1, $t0      # arr + offset = address of arr[2]
+lw $t2, 0($t1)         # Load value at arr[2]
+sw $t2, 20($sp)        # Store in x's location
+```
+
+### Write: `arr[3] = 10`
+
+**TAC:**
+```
+arr[3] = 10
+```
+
+**MIPS:**
+```assembly
+# Evaluate value
+li $t0, 10             # Value to store
+
+# Calculate element address
+li $t1, 3              # Index = 3
+sll $t1, $t1, 2        # Multiply by 4: 3 * 4 = 12
+addi $t2, $sp, 0       # Base address
+add $t2, $t2, $t1      # Element address
+
+# Store value
+sw $t0, 0($t2)         # arr[3] = 10
+```
+
+## Array Index Calculation Formula
+
+```
+element_address = base_address + (index * element_size)
+```
+
+For 4-byte integers:
+```
+arr[i] address = arr_base + (i * 4)
+```
+
+In MIPS, we use **shift left logical (sll)** to multiply by 4:
+```assembly
+sll $t0, $t0, 2    # Equivalent to: $t0 = $t0 * 4
+```
+
+Why? Shifting left by 2 bits multiplies by 2² = 4, which is faster than multiplication.
+
+## Arrays with Functions
+
+### Passing Array Elements
+
+You can pass array elements as arguments:
+
+```c
+int arr[3];
+arr[0] = 5;
+result = double(arr[0]);   // Pass arr[0] value to function
+```
+
+**Process:**
+1. Load `arr[0]` into register
+2. Move to `$a0`
+3. Call function
+
+### Storing Function Results in Arrays
+
+```c
+arr[1] = getFive();   // Store return value in array
+```
+
+**MIPS:**
+```assembly
+# Call function
+jal getFive           # Result in $v0
+
+# Calculate arr[1] address
+li $t0, 1
+sll $t0, $t0, 2       # Index * 4
+addi $t1, $sp, 0      # Base address
+add $t1, $t1, $t0     # Element address
+
+# Store result
+sw $v0, 0($t1)        # arr[1] = return value
+```
+
+## Multi-Dimensional Arrays (Conceptual)
+
+While not implemented in your compiler, 2D arrays work like this:
+
+```c
+int matrix[3][4];  // 3 rows, 4 columns
+```
+
+**Memory:** Stored as flat array: `matrix[0][0], matrix[0][1], ..., matrix[2][3]`
+
+**Access formula:**
+```
+matrix[i][j] = base + ((i * num_cols) + j) * element_size
+```
+
+---
+
+# FUNCTIONS - DEEP DIVE
+
+## Function Declaration Phases
+
+### 1. Parsing (AST Creation)
+
+**Source:** `# add(int a, int b) { return a + b; }`
+
+**AST:**
+```
+NODE_FUNC_DECL
+├─ name: "add"
+├─ params: PARAM_LIST
+│   ├─ PARAM("a")
+│   └─ PARAM("b")
+└─ body: STMT_LIST
+    └─ RETURN(a + b)
+```
+
+### 2. Semantic Analysis
+
+**Actions:**
+- Add `add` to symbol table as function
+- Enter new scope
+- Add parameters `a`, `b` to scope
+- Check return statement type
+- Exit scope
+
+### 3. TAC Generation
+
+```
+1: FUNC_BEGIN add
+2: LABEL add:
+3: PARAM a
+4: PARAM b
+5: t0 = a + b
+6: RETURN t0
+7: FUNC_END add
+```
+
+### 4. Code Generation (MIPS)
+
+```assembly
+# Function: add
+add:
+    # Prologue
+    addi $sp, $sp, -32
+    sw $ra, 28($sp)
+    sw $fp, 24($sp)
+    move $fp, $sp
+
+    # Store params
+    sw $a0, 0($sp)     # a
+    sw $a1, 4($sp)     # b
+
+    # Body
+    lw $t0, 0($sp)     # Load a
+    lw $t1, 4($sp)     # Load b
+    add $t2, $t0, $t1  # a + b
+    move $v0, $t2      # Set return value
+
+    # Epilogue
+    lw $fp, 24($sp)
+    lw $ra, 28($sp)
+    addi $sp, $sp, 32
+    jr $ra
+```
+
+## Function Call Argument Handling
+
+### Challenge: Nested STMT_LIST Structure
+
+For 3 arguments like `func(1, 2, 3)`, parser creates:
+
+```
+STMT_LIST
+├─ stmt: STMT_LIST
+│   ├─ stmt: NUM(1)
+│   └─ next: NUM(2)
+└─ next: NUM(3)
+```
+
+### Solution: Recursive Traversal
+
+```c
+while (arg) {
+    if (arg->type == NODE_STMT_LIST) {
+        if (arg->stmt is also STMT_LIST) {
+            // Recursively flatten nested lists
+            process_nested(arg->stmt);
+        }
+        genExpr(arg->stmt);
+        arg = arg->next;
+    } else {
+        genExpr(arg);
+        arg = NULL;
+    }
+}
+```
+
+## Stack Frame Layout
+
+### Example Function: `# compute(int x, int y)`
+
+```
+High Memory
+    ┌─────────────────┐
+    │  Caller's Frame │
+    ├─────────────────┤ ← $fp (old)
+    │   Return Addr   │ $sp + 28
+    ├─────────────────┤
+    │   Old $fp       │ $sp + 24
+    ├─────────────────┤
+    │   Local var 1   │ $sp + 12
+    ├─────────────────┤
+    │   Parameter y   │ $sp + 4
+    ├─────────────────┤
+    │   Parameter x   │ $sp + 0
+    └─────────────────┘ ← $sp (current)
+Low Memory
+```
+
+**Frame Size:** 32 bytes (adjustable based on needs)
+
+## Nested Function Calls
+
+### Example: `result = add(double(5), 3)`
+
+**Execution Order:**
+1. Evaluate inner call: `double(5)`
+   - Push arguments to `$a0`
+   - `jal double`
+   - Result in `$v0`
+   - Save to temp location
+2. Evaluate outer call: `add(temp, 3)`
+   - Load temp to `$a0`
+   - Load 3 to `$a1`
+   - `jal add`
+   - Result in `$v0`
+3. Store final result
+
+**Key Point:** Each function call creates its own stack frame, so they don't interfere!
+
+## Recursion (Conceptual)
+
+Your compiler supports recursion through proper stack management:
+
+```c
+# factorial(int n) {
+    int result;
+    if (n == 1) {
+        return 1;
+    }
+    result = n * factorial(n - 1);  // Recursive call
+    return result;
+}
+```
+
+Each recursive call gets its own stack frame with separate `n` and `result`.
+
+## Scope and Variable Shadowing
+
+### Example
+
+```c
+int x = 10;           // Global x
+
+# test(int x) {       // Parameter x shadows global
+    int y;
+    y = x + 5;        // Uses parameter x (not global)
+    return y;
+}
+
+print(test(3));       // Prints 8 (3 + 5)
+print(x);             // Prints 10 (global unchanged)
+```
+
+**Symbol Table During `test`:**
+
+```
+Global Scope:
+  x → offset 0, value 10
+
+Function Scope (test):
+  x → offset 0 (parameter)   ← This shadows global x
+  y → offset 4 (local)
+```
+
+**Lookup Process:**
+1. Search current scope first → finds parameter `x`
+2. If not found, search parent scope
+3. Continue up scope chain until global
+
+## Parameter Passing Mechanism
+
+Your compiler uses **call by value**:
+- Arguments are **copied** to function
+- Changes inside function don't affect caller's variables
+
+```c
+# modify(int n) {
+    n = n + 10;       // Modifies local copy only
+    return n;
+}
+
+int x = 5;
+modify(x);            // x is still 5 after call
+```
+
+## Function Return Values
+
+Functions return values via `$v0` register:
+
+```assembly
+# Inside function
+move $v0, $t0         # Put result in $v0
+
+# After function returns
+move $t1, $v0         # Get result from $v0
+```
+
+**Limitation:** Can only return one value (could use `$v0` and `$v1` for two values).
+
+## Arrays and Functions Together
+
+### Passing Array Elements
+
+```c
+int arr[3];
+arr[0] = 10;
+arr[1] = 20;
+
+int result = add(arr[0], arr[1]);  // Passes values 10 and 20
+```
+
+### Storing Return Values in Arrays
+
+```c
+arr[2] = add(arr[0], arr[1]);     // arr[2] = 30
+```
+
+**Process:**
+1. Load `arr[0]` → `$a0`
+2. Load `arr[1]` → `$a1`
+3. `jal add`
+4. Result in `$v0`
+5. Calculate `arr[2]` address
+6. Store `$v0` at that address
+
+### Complex Example
+
+```c
+# getFive() { return 5; }
+# double(int n) { return n + n; }
+# add(int a, int b) { return a + b; }
+
+int arr[3];
+arr[0] = getFive();              // arr[0] = 5
+arr[1] = double(4);              // arr[1] = 8
+arr[2] = add(arr[0], arr[1]);   // arr[2] = 13
+```
+
+**TAC:**
+```
+1: t0 = CALL getFive, 0
+2: arr[0] = t0
+3: PARAM 4
+4: t1 = CALL double, 1
+5: arr[1] = t1
+6: t2 = array[0]        // Load arr[0]
+7: PARAM t2
+8: t3 = array[1]        // Load arr[1]
+9: PARAM t3
+10: t4 = CALL add, 2
+11: arr[2] = t4
+```
+
+---
+
 # COMMON QUIZ QUESTIONS
 
 ## 1. Name the phases of a compiler
@@ -980,6 +1406,113 @@ operation  destination, source1, source2
    add        $t0,      $t1,     $t2
 ```
 
+## 15. How do you calculate array element address in MIPS?
+
+**Answer:**
+```
+element_address = base_address + (index * element_size)
+```
+
+For 4-byte integers:
+```assembly
+li $t0, 2              # Index = 2
+sll $t0, $t0, 2        # Multiply by 4: $t0 = index * 4
+addi $t1, $sp, 0       # Base address of array
+add $t1, $t1, $t0      # Element address
+lw $t2, 0($t1)         # Load arr[2]
+```
+
+**Why shift instead of multiply?** `sll $t0, 2` shifts left by 2 bits, which multiplies by 2² = 4. It's faster than multiplication.
+
+## 16. Explain function prologue and epilogue
+
+**Prologue** (setup):
+```assembly
+addi $sp, $sp, -32    # Allocate frame
+sw $ra, 28($sp)       # Save return address
+sw $fp, 24($sp)       # Save frame pointer
+move $fp, $sp         # Set new frame pointer
+```
+
+**Epilogue** (cleanup):
+```assembly
+lw $fp, 24($sp)       # Restore frame pointer
+lw $ra, 28($sp)       # Restore return address
+addi $sp, $sp, 32     # Deallocate frame
+jr $ra                # Return
+```
+
+## 17. What happens when a function calls another function?
+
+**Answer:** Each call creates a new stack frame:
+
+```
+Stack Growth:
+    main's frame
+    ├─ saves $ra (return to OS)
+    ├─ calls foo()
+    │
+    foo's frame
+    ├─ saves $ra (return to main)
+    ├─ calls bar()
+    │
+    bar's frame
+    ├─ saves $ra (return to foo)
+    └─ executes and returns
+```
+
+When `bar` returns, `jr $ra` jumps back to `foo`. When `foo` returns, `jr $ra` jumps back to `main`.
+
+## 18. How are function arguments passed in your compiler?
+
+**Answer:**
+- **First 4 arguments**: Passed in `$a0-$a3` registers
+- **More than 4**: Would need stack (not implemented)
+- **Mechanism**: Call by value (copies passed, not originals)
+
+Example for `add(5, 3)`:
+```assembly
+li $a0, 5         # First argument
+li $a1, 3         # Second argument
+jal add           # Call function
+move $t0, $v0     # Get result from $v0
+```
+
+## 19. Why do we need scope management?
+
+**Answer:** To support:
+1. **Variable shadowing** - local variable hides global with same name
+2. **Local variables** - variables that exist only within a function
+3. **Separate namespaces** - same variable name can mean different things in different scopes
+4. **Memory management** - deallocate locals when scope exits
+
+## 20. How do arrays and functions work together?
+
+**Answer:** Three main interactions:
+
+1. **Pass array element to function:**
+```c
+result = double(arr[0]);
+```
+- Load `arr[0]` value
+- Pass to function via `$a0`
+
+2. **Store function result in array:**
+```c
+arr[1] = getFive();
+```
+- Call function, result in `$v0`
+- Calculate `arr[1]` address
+- Store `$v0` at that address
+
+3. **Use array elements as multiple arguments:**
+```c
+result = add(arr[0], arr[1]);
+```
+- Load `arr[0]` → `$a0`
+- Load `arr[1]` → `$a1`
+- Call `add`
+
 ---
 
 # STUDY TIPS
@@ -1002,11 +1535,28 @@ operation  destination, source1, source2
 
 ## Practice Questions to Try
 
+### Basic Compilation
 1. Convert `x = (a + b) * (c - d);` to TAC
 2. Draw AST for `if (x > 5) { y = x * 2; }`
-3. Write MIPS code for function that adds two numbers
-4. Trace scope stack through nested function calls
-5. Identify which registers need to be saved in a function
+3. Tokenize: `int x = arr[5] + 10;`
+
+### Functions
+4. Write MIPS code for function that adds two numbers
+5. Trace scope stack through nested function calls
+6. Identify which registers need to be saved in a function
+7. What does this function return? `# test(int x) { return x + x; }` called with `test(7)`
+8. Draw stack frames for: `main() calls foo() calls bar()`
+
+### Arrays
+9. Write MIPS to access `arr[3]` where arr starts at offset 0
+10. Calculate memory needed for `int arr[10];`
+11. Convert array assignment `arr[i] = x + y;` to TAC
+12. Why do we use `sll` by 2 for array indexing?
+
+### Combined
+13. Trace execution: `arr[0] = double(5); arr[1] = arr[0] + 3;`
+14. Write function that returns sum of two array elements
+15. Explain what happens when `foo(arr[0])` is called
 
 ---
 

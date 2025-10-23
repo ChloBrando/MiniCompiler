@@ -131,6 +131,39 @@ int addVar(char* name) {
     return offset;
 }
 
+int addFloatVar(char* name) {
+    /* Check for duplicate declaration IN CURRENT SCOPE ONLY */
+    if (isInCurrentScope(name)) {
+#if SYMTAB_DEBUG
+        printf("SYMBOL TABLE: Failed to add '%s' - already declared in current scope\n", name);
+#endif
+        return -1;
+    }
+
+    /* Get current scope */
+    Scope* scope = symtab.currentScope;
+
+    /* Add new float variable to current scope */
+    scope->vars[scope->count].name = strdup(name);
+    scope->vars[scope->count].offset = scope->nextOffset;
+    scope->vars[scope->count].isArray = 0;
+    scope->vars[scope->count].arraySize = 0;
+    scope->vars[scope->count].type = 2; /* float type */
+    scope->vars[scope->count].isFunction = 0;
+    scope->vars[scope->count].paramCount = 0;
+    scope->vars[scope->count].paramTypes = NULL;
+
+    int offset = scope->nextOffset;
+    scope->nextOffset += 4; /* float size */
+    scope->count++;
+
+#if SYMTAB_DEBUG
+    printf("SYMBOL TABLE: Added float variable '%s' at offset %d\n", name, offset);
+    printSymTab();
+#endif
+    return offset;
+}
+
 int addStringVar(char* name) {
     /* Check for duplicate declaration IN CURRENT SCOPE ONLY */
     if (isInCurrentScope(name)) {
@@ -247,6 +280,15 @@ int isStringVar(char* name) {
     return 0;  /* Not found or not a string */
 }
 
+/* Check if variable is a float */
+int isFloatVar(char* name) {
+    Symbol* sym = lookupSymbol(name);
+    if (sym) {
+        return sym->type == 2;
+    }
+    return 0;  /* Not found or not a float */
+}
+
 /* Add a function to the symbol table */
 int addFunction(char* name, char* returnType, char** paramTypes, int paramCount) {
     /* Check for duplicate declaration IN CURRENT SCOPE ONLY */
@@ -292,8 +334,7 @@ int addFunction(char* name, char* returnType, char** paramTypes, int paramCount)
 /* Add a parameter to the current scope (called when entering a function) */
 int addParameter(char* name, char* type) {
     /* Parameters are just variables in the function's local scope */
-    /* For now, treat them as regular int variables */
-    /* In a full implementation, you'd track the type parameter */
+    /* Now we properly track the type parameter */
 
     /* Check for duplicate parameter name IN CURRENT SCOPE ONLY */
     if (isInCurrentScope(name)) {
@@ -306,10 +347,18 @@ int addParameter(char* name, char* type) {
     /* Get current scope */
     Scope* scope = symtab.currentScope;
 
+    /* Determine type code: 0=int, 1=string, 2=float */
+    int typeCode = 0;
+    if (strcmp(type, "float") == 0) {
+        typeCode = 2;
+    } else if (strcmp(type, "string") == 0) {
+        typeCode = 1;
+    }
+
     /* Add parameter as a variable in current scope */
     scope->vars[scope->count].name = strdup(name);
     scope->vars[scope->count].offset = scope->nextOffset;
-    scope->vars[scope->count].type = 0;  /* Assume int for now */
+    scope->vars[scope->count].type = typeCode;
     scope->vars[scope->count].isArray = 0;
     scope->vars[scope->count].arraySize = 0;
     scope->vars[scope->count].isFunction = 0;
@@ -321,7 +370,7 @@ int addParameter(char* name, char* type) {
     scope->count++;
 
 #if SYMTAB_DEBUG
-    printf("SYMBOL TABLE: Added parameter '%s' at offset %d\n", name, offset);
+    printf("SYMBOL TABLE: Added parameter '%s' (type=%s) at offset %d\n", name, type, offset);
     printSymTab();
 #endif
 
@@ -359,19 +408,18 @@ static void printSymTab() {
             printf("  (empty)\n");
         } else {
             for (int i = 0; i < scope->count; i++) {
+                const char* typeName = scope->vars[i].type == 0 ? "int" :
+                                       scope->vars[i].type == 1 ? "string" : "float";
                 if (scope->vars[i].isFunction) {
                     printf("  [%d] FUNC %s(%d params) -> type=%s\n",
-                        i, scope->vars[i].name, scope->vars[i].paramCount,
-                        scope->vars[i].type == 1 ? "string" : "int");
+                        i, scope->vars[i].name, scope->vars[i].paramCount, typeName);
                 } else if (scope->vars[i].isArray) {
                     printf("  [%d] %s[%d] -> offset %d, type=%s\n",
                         i, scope->vars[i].name, scope->vars[i].arraySize,
-                        scope->vars[i].offset,
-                        scope->vars[i].type == 1 ? "string" : "int");
+                        scope->vars[i].offset, typeName);
                 } else {
                     printf("  [%d] %s -> offset %d, type=%s\n",
-                        i, scope->vars[i].name, scope->vars[i].offset,
-                        scope->vars[i].type == 1 ? "string" : "int");
+                        i, scope->vars[i].name, scope->vars[i].offset, typeName);
                 }
             }
         }

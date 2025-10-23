@@ -15,6 +15,14 @@ ASTNode* createNum(int value) {
     return node;
 }
 
+/* Create a float literal node */
+ASTNode* createFloatNum(float value) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_FLOAT;
+    node->data.fnum = value;  /* Store the float value */
+    return node;
+}
+
 /* Create a variable reference node */
 ASTNode* createVar(char* name) {
     ASTNode* node = malloc(sizeof(ASTNode));
@@ -53,6 +61,14 @@ ASTNode* createDecl(char* name) {
 ASTNode* createStrDecl(char* name) {
     ASTNode* node = malloc(sizeof(ASTNode));
     node->type = NODE_STR_DECL;
+    node->data.name = strdup(name);
+    return node;
+}
+
+/* Create a float declaration node */
+ASTNode* createFloatDecl(char* name) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_FLOAT_DECL;
     node->data.name = strdup(name);
     return node;
 }
@@ -122,19 +138,20 @@ ASTNode* createFuncDecl(char* name, ASTNode* params, ASTNode* body) {
 }
 
 /* Create a parameter node */
-ASTNode* createParam(char* name) {
+ASTNode* createParam(char* name, char* type) {
     ASTNode* node = malloc(sizeof(ASTNode));
     node->type = NODE_PARAM;
     node->data.param.name = strdup(name);
+    node->data.param.type = strdup(type);
     node->data.param.next = NULL;
     return node;
 }
 
 /* Add a parameter to the list */
-ASTNode* addParam(ASTNode* list, char* name) {
-    ASTNode* newParam = createParam(name);
+ASTNode* addParam(ASTNode* list, char* name, char* type) {
+    ASTNode* newParam = createParam(name, type);
     if (!list) return newParam;
-    
+
     /* Find the end of the list */
     ASTNode* current = list;
     while (current->data.param.next != NULL) {
@@ -173,6 +190,9 @@ void printAST(ASTNode* node, int level) {
         case NODE_NUM:
             printf("NUM: %d\n", node->data.num);
             break;
+        case NODE_FLOAT:
+            printf("FLOAT: %f\n", node->data.fnum);
+            break;
         case NODE_STR:
             printf("STR: %s\n", node->data.str);
             break;
@@ -186,6 +206,9 @@ void printAST(ASTNode* node, int level) {
             break;
         case NODE_DECL:
             printf("DECL: %s\n", node->data.name);
+            break;
+        case NODE_FLOAT_DECL:
+            printf("FLOAT_DECL: %s\n", node->data.name);
             break;
         case NODE_STR_DECL:
             printf("STR_DECL: %s\n", node->data.name);
@@ -234,7 +257,7 @@ void printAST(ASTNode* node, int level) {
             break;
 
         case NODE_PARAM:
-            printf("PARAM: %s\n", node->data.param.name);
+            printf("PARAM: %s %s\n", node->data.param.type, node->data.param.name);
             if (node->data.param.next) {
                 printAST(node->data.param.next, level);
             }

@@ -40,28 +40,32 @@
       know about them.  */
    enum yytokentype {
      NUM = 258,
-     ID = 259,
-     INT = 260,
-     PRINT = 261,
-     VAR = 262,
-     STRING = 263,
-     FUNCTION = 264,
-     RETURN = 265,
-     VOID = 266,
-     STRING_LITERAL = 267
+     FLOAT_NUM = 259,
+     ID = 260,
+     INT = 261,
+     FLOAT = 262,
+     PRINT = 263,
+     VAR = 264,
+     STRING = 265,
+     FUNCTION = 266,
+     RETURN = 267,
+     VOID = 268,
+     STRING_LITERAL = 269
    };
 #endif
 /* Tokens.  */
 #define NUM 258
-#define ID 259
-#define INT 260
-#define PRINT 261
-#define VAR 262
-#define STRING 263
-#define FUNCTION 264
-#define RETURN 265
-#define VOID 266
-#define STRING_LITERAL 267
+#define FLOAT_NUM 259
+#define ID 260
+#define INT 261
+#define FLOAT 262
+#define PRINT 263
+#define VAR 264
+#define STRING 265
+#define FUNCTION 266
+#define RETURN 267
+#define VOID 268
+#define STRING_LITERAL 269
 
 
 
@@ -71,11 +75,12 @@ typedef union YYSTYPE
 #line 25 "parser.y"
 {
     int num;                /* For integer literals */
+    float fnum;             /* For float literals */
     char* str;              /* For identifiers */
     struct ASTNode* node;   /* For AST nodes */
 }
 /* Line 1529 of yacc.c.  */
-#line 79 "parser.tab.h"
+#line 84 "parser.tab.h"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1

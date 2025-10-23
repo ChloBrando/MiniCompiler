@@ -5,6 +5,7 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 #include "parser.tab.h"  /* Token definitions from Bison */
 %}
 
@@ -15,6 +16,7 @@
 %%
 
 "int"           { return INT; }
+"float"         { return FLOAT; }
 "print"         { return PRINT; }
 "string"        { return STRING; }
 "return"        { return RETURN; }
@@ -40,9 +42,14 @@
     }
 }
 
-[0-9]+          { 
+[0-9]+\.[0-9]+  {
+    yylval.fnum = atof(yytext);
+    return FLOAT_NUM;
+}
+
+[0-9]+          {
     yylval.num = atoi(yytext);
-    return NUM; 
+    return NUM;
 }
 
 "+"             { return '+'; }

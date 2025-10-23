@@ -58,7 +58,13 @@ char* generateTACExpr(ASTNode* node) {
             sprintf(temp, "%d", node->data.num);
             return temp;
         }
-        
+
+        case NODE_FLOAT: {
+            char* temp = malloc(20);
+            sprintf(temp, "%f", node->data.fnum);
+            return temp;
+        }
+
         case NODE_VAR:
             return strdup(node->data.name);
 
@@ -164,6 +170,10 @@ void generateTAC(ASTNode* node) {
     
     switch(node->type) {
         case NODE_DECL:
+            appendTAC(createTAC(TAC_DECL, NULL, NULL, node->data.name));
+            break;
+        case NODE_FLOAT_DECL:
+            /* Float variable declaration appears as a normal decl in TAC */
             appendTAC(createTAC(TAC_DECL, NULL, NULL, node->data.name));
             break;
         case NODE_STR_DECL:

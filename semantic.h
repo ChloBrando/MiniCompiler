@@ -9,6 +9,7 @@
 #define TYPE_INT 0
 #define TYPE_STRING 1
 #define TYPE_ARRAY_INT 2
+#define TYPE_FLOAT 3
 
 /* Perform semantic checks on the AST. Returns 0 on success, non-zero on error. */
 int semanticCheck(ASTNode* root);

@@ -24,14 +24,16 @@ ASTNode* root = NULL;          /* Root of the Abstract Syntax Tree */
  */
 %union {
     int num;                /* For integer literals */
+    float fnum;             /* For float literals */
     char* str;              /* For identifiers */
     struct ASTNode* node;   /* For AST nodes */
 }
 
 /* TOKEN DECLARATIONS with their semantic value types */
 %token <num> NUM        /* Number token carries an integer value */
+%token <fnum> FLOAT_NUM /* Float token carries a float value */
 %token <str> ID         /* Identifier token carries a string */
-%token INT PRINT VAR STRING FUNCTION RETURN VOID
+%token INT FLOAT PRINT VAR STRING FUNCTION RETURN VOID
 %token <str> STRING_LITERAL
 
 /* NON-TERMINAL TYPES - Define what type each grammar rule returns */
@@ -75,13 +77,17 @@ stmt:
     | RETURN ';'      { $$ = createReturn(NULL); } /* Return void */
     ;
 
-/* DECLARATION RULE - "int x;" and "int x[NUM];" */
+/* DECLARATION RULE - "int x;" and "int x[NUM];" and "float x;" */
 decl:
-    INT ID ';' { 
+    INT ID ';' {
                 $$ = createDecl($2);
                 free($2);
     }
-  | INT ID '[' NUM ']' ';' { 
+  | FLOAT ID ';' {
+                $$ = createFloatDecl($2);
+                free($2);
+    }
+  | INT ID '[' NUM ']' ';' {
                 $$ = createArrayDecl($2, $4);
                 free($2);
     }
@@ -105,11 +111,15 @@ assign:
 
 /* EXPRESSION RULES - Build expression trees */
 expr:
-    NUM { 
+    NUM {
         /* Literal number */
         $$ = createNum($1);  /* Create leaf node with number value */
     }
-    | ID { 
+    | FLOAT_NUM {
+        /* Literal float */
+        $$ = createFloatNum($1);  /* Create leaf node with float value */
+    }
+    | ID {
         /* Variable reference */
         $$ = createVar($1);  /* Create leaf node with variable name */
         free($1);            /* Free the identifier string */
@@ -165,14 +175,22 @@ func_decl:
     }
     ;
 
-/* PARAMETER LIST - "int x" or "int x, int y, ..." */
+/* PARAMETER LIST - "int x" or "float x" or "int x, float y, ..." */
 param_list:
     INT ID {
-        $$ = createParam($2);
+        $$ = createParam($2, "int");
+        free($2);
+    }
+    | FLOAT ID {
+        $$ = createParam($2, "float");
         free($2);
     }
     | param_list ',' INT ID {
-        $$ = addParam($1, $4);
+        $$ = addParam($1, $4, "int");
+        free($4);
+    }
+    | param_list ',' FLOAT ID {
+        $$ = addParam($1, $4, "float");
         free($4);
     }
     ;

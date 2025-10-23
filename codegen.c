@@ -7,10 +7,14 @@
 
 FILE* output;
 int tempReg = 0;
+int tempFloatReg = 0;  /* for $f0-$f7 temporaries */
 int strLabelCount = 0;  /* counter for unique string labels */
 int concatEmitted = 0;  /* emit concat helper only once */
 char* strLiterals[200];
 int strLitCount = 0;
+int floatLabelCount = 0; /* counter for float literal labels */
+float floatLiterals[200]; /* store float literals */
+int floatLitCount = 0;
 
 /* Add string literal to the pool if missing, return its label index */
 int addStrLiteralIfMissing(const char* s) {
@@ -21,12 +25,15 @@ int addStrLiteralIfMissing(const char* s) {
     return strLitCount - 1;
 }
 
-/* Walk the AST and collect all string literals (unique) before codegen */
+/* Walk the AST and collect all string and float literals before codegen */
 void collectStringLiterals(ASTNode* node) {
     if (!node) return;
     switch (node->type) {
         case NODE_STR:
             addStrLiteralIfMissing(node->data.str);
+            break;
+        case NODE_FLOAT:
+            floatLiterals[floatLitCount++] = node->data.fnum;
             break;
         case NODE_BINOP:
             collectStringLiterals(node->data.binop.left);
@@ -69,6 +76,13 @@ int getNextTemp() {
     return reg;
 }
 
+int getNextFloatTemp() {
+    int reg = tempFloatReg;
+    tempFloatReg += 2;  // MIPS float regs work in pairs: $f0-$f1, $f2-$f3, etc.
+    if (tempFloatReg > 14) tempFloatReg = 0;  // Reuse $f0-$f15
+    return reg;
+}
+
 /* Helper: detect if an AST expression is a string or string variable */
 /* Use the semantic exprType (more accurate) instead of ad-hoc heuristics */
 int exprIsString(ASTNode* node) {
@@ -79,11 +93,33 @@ int exprIsString(ASTNode* node) {
 
 void genExpr(ASTNode* node) {
     if (!node) return;
-    
+
+    int nodeType = exprType(node);
+
     switch(node->type) {
         case NODE_NUM:
             fprintf(output, "    li $t%d, %d\n", getNextTemp(), node->data.num);
             break;
+
+        case NODE_FLOAT: {
+            /* For float literals, find its index in the collected literals */
+            int labelIdx = -1;
+            for (int i = 0; i < floatLitCount; i++) {
+                if (floatLiterals[i] == node->data.fnum) {
+                    labelIdx = i;
+                    break;
+                }
+            }
+            if (labelIdx == -1) {
+                /* Not found - add it now (shouldn't happen if collectStringLiterals was called) */
+                labelIdx = floatLitCount;
+                floatLiterals[floatLitCount++] = node->data.fnum;
+            }
+            fprintf(output, "    # Load float literal %f\n", node->data.fnum);
+            fprintf(output, "    la $t0, float_literal_%d\n", labelIdx);
+            fprintf(output, "    lwc1 $f%d, 0($t0)\n", getNextFloatTemp());
+            break;
+        }
 
         case NODE_STR: {
             /* Use the pool and load address of the string literal */
@@ -102,11 +138,17 @@ void genExpr(ASTNode* node) {
                 fprintf(stderr, "Error: Variable %s not declared\n", node->data.name);
                 exit(1);
             }
-            fprintf(output, "    lw $t%d, %d($sp)\n", getNextTemp(), offset);
+            if (isFloatVar(node->data.name)) {
+                fprintf(output, "    lwc1 $f%d, %d($sp)\n", getNextFloatTemp(), offset);
+            } else {
+                fprintf(output, "    lw $t%d, %d($sp)\n", getNextTemp(), offset);
+            }
             break;
         }
         
         case NODE_BINOP: {
+            int resultType = exprType(node);
+
             /* If semantic type says this expression is a string, treat '+' as string concatenation */
             if (node->data.binop.op == '+' && exprIsString(node)) {
                 /* generate left and right into temporaries */
@@ -124,12 +166,53 @@ void genExpr(ASTNode* node) {
                 int dest = getNextTemp();
                 fprintf(output, "    move $t%d, $v0\n", dest);
                 tempReg = dest + 1;
+            } else if (resultType == TYPE_FLOAT) {
+                /* Float arithmetic */
+                int leftType = exprType(node->data.binop.left);
+                int rightType = exprType(node->data.binop.right);
+
+                genExpr(node->data.binop.left);
+                int leftReg = (leftType == TYPE_FLOAT) ? (tempFloatReg - 2) : (tempReg - 1);
+
+                genExpr(node->data.binop.right);
+                int rightReg = (rightType == TYPE_FLOAT) ? (tempFloatReg - 2) : (tempReg - 1);
+
+                /* Handle int->float conversion if needed */
+                int leftFloatReg = leftReg;
+                int rightFloatReg = rightReg;
+
+                if (leftType == TYPE_INT) {
+                    /* Convert int to float */
+                    fprintf(output, "    # Convert int to float\n");
+                    fprintf(output, "    mtc1 $t%d, $f%d\n", leftReg, getNextFloatTemp());
+                    fprintf(output, "    cvt.s.w $f%d, $f%d\n", tempFloatReg-2, tempFloatReg-2);
+                    leftFloatReg = tempFloatReg - 2;
+                }
+
+                if (rightType == TYPE_INT) {
+                    /* Convert int to float */
+                    fprintf(output, "    # Convert int to float\n");
+                    fprintf(output, "    mtc1 $t%d, $f%d\n", rightReg, getNextFloatTemp());
+                    fprintf(output, "    cvt.s.w $f%d, $f%d\n", tempFloatReg-2, tempFloatReg-2);
+                    rightFloatReg = tempFloatReg - 2;
+                }
+
+                if (node->data.binop.op == '+') {
+                    fprintf(output, "    # Float addition\n");
+                    fprintf(output, "    add.s $f%d, $f%d, $f%d\n", leftFloatReg, leftFloatReg, rightFloatReg);
+                    tempFloatReg = leftFloatReg + 2;
+                } else if (node->data.binop.op == '-') {
+                    fprintf(output, "    # Float subtraction\n");
+                    fprintf(output, "    sub.s $f%d, $f%d, $f%d\n", leftFloatReg, leftFloatReg, rightFloatReg);
+                    tempFloatReg = leftFloatReg + 2;
+                }
             } else {
+                /* Integer arithmetic */
                 genExpr(node->data.binop.left);
                 int leftReg = tempReg - 1;
                 genExpr(node->data.binop.right);
                 int rightReg = tempReg - 1;
-                
+
                 if (node->data.binop.op == '+') {
                     fprintf(output, "    # Addition\n");
                     fprintf(output, "    add $t%d, $t%d, $t%d\n", leftReg, leftReg, rightReg);
@@ -264,6 +347,16 @@ void genStmt(ASTNode* node) {
             fprintf(output, "    # Declared %s at offset %d\n", node->data.name, offset);
             break;
         }
+        case NODE_FLOAT_DECL: {
+            /* Add float variable to symbol table during code generation */
+            int offset = addFloatVar(node->data.name);
+            if (offset == -1) {
+                /* Already declared - get existing offset */
+                offset = getVarOffset(node->data.name);
+            }
+            fprintf(output, "    # Declared float %s at offset %d\n", node->data.name, offset);
+            break;
+        }
         case NODE_STR_DECL: {
             /* Add string variable to symbol table during code generation */
             int offset = addStringVar(node->data.name);
@@ -281,13 +374,32 @@ void genStmt(ASTNode* node) {
                 fprintf(stderr, "Error: Variable %s not declared\n", node->data.assign.var);
                 exit(1);
             }
+            int varType = isFloatVar(node->data.assign.var) ? TYPE_FLOAT :
+                         (isStringVar(node->data.assign.var) ? TYPE_STRING : TYPE_INT);
+            int exprTypeVal = exprType(node->data.assign.value);
+
             genExpr(node->data.assign.value);
-            fprintf(output, "    sw $t%d, %d($sp)\n", tempReg - 1, offset);
+
+            if (varType == TYPE_FLOAT) {
+                if (exprTypeVal == TYPE_INT) {
+                    /* Convert int to float before storing */
+                    fprintf(output, "    # Convert int to float for assignment\n");
+                    fprintf(output, "    mtc1 $t%d, $f%d\n", tempReg - 1, getNextFloatTemp());
+                    fprintf(output, "    cvt.s.w $f%d, $f%d\n", tempFloatReg-2, tempFloatReg-2);
+                    fprintf(output, "    swc1 $f%d, %d($sp)\n", tempFloatReg - 2, offset);
+                } else {
+                    fprintf(output, "    swc1 $f%d, %d($sp)\n", tempFloatReg - 2, offset);
+                }
+                tempFloatReg = 0;
+            } else {
+                fprintf(output, "    sw $t%d, %d($sp)\n", tempReg - 1, offset);
+            }
             tempReg = 0;
             break;
         }
         
-        case NODE_PRINT:
+        case NODE_PRINT: {
+            int printType = exprType(node->data.expr);
             genExpr(node->data.expr);
             /* Decide by semantic type */
             if (exprIsString(node->data.expr)) {
@@ -306,6 +418,13 @@ void genStmt(ASTNode* node) {
                 }
                 fprintf(output, "    li $v0, 4\n");
                 fprintf(output, "    syscall\n");
+            } else if (printType == TYPE_FLOAT) {
+                /* Float */
+                fprintf(output, "    # Print float\n");
+                fprintf(output, "    mov.s $f12, $f%d\n", tempFloatReg - 2);
+                fprintf(output, "    li $v0, 2\n");
+                fprintf(output, "    syscall\n");
+                tempFloatReg = 0;
             } else {
                 /* Integer */
                 fprintf(output, "    # Print integer (expr)\n");
@@ -319,6 +438,7 @@ void genStmt(ASTNode* node) {
             fprintf(output, "    syscall\n");
             tempReg = 0;
             break;
+        }
             
         case NODE_STMT_LIST:
             genStmt(node->data.stmtlist.stmt);
@@ -384,7 +504,7 @@ void genStmt(ASTNode* node) {
             ASTNode* param = node->data.funcDecl.params;
             int paramNum = 0;
             while (param && paramNum < 4) {
-                addParameter(param->data.param.name, "int");
+                addParameter(param->data.param.name, param->data.param.type);
                 param = param->data.param.next;
                 paramNum++;
             }
@@ -399,15 +519,23 @@ void genStmt(ASTNode* node) {
             fprintf(output, "    sw $fp, %d($sp)      # Save frame pointer\n", frameSize - 8);
             fprintf(output, "    move $fp, $sp        # Set new frame pointer\n");
 
-            /* Parameters are in $a0-$a3, store them on stack */
+            /* Parameters are in $a0-$a3 (or $f12-$f14 for floats), store them on stack */
             param = node->data.funcDecl.params;
             paramNum = 0;
             fprintf(output, "    # Store parameters\n");
             while (param && paramNum < 4) {
                 int paramOffset = getVarOffset(param->data.param.name);
                 if (paramOffset != -1) {
-                    fprintf(output, "    sw $a%d, %d($sp)     # Store param '%s'\n",
-                            paramNum, paramOffset, param->data.param.name);
+                    if (strcmp(param->data.param.type, "float") == 0) {
+                        /* Float parameters come in $f12, $f13, $f14 for the first 3 */
+                        /* For simplicity, we'll assume they're passed via int registers and converted */
+                        fprintf(output, "    mtc1 $a%d, $f0       # Move param to float reg\n", paramNum);
+                        fprintf(output, "    swc1 $f0, %d($sp)    # Store float param '%s'\n",
+                                paramOffset, param->data.param.name);
+                    } else {
+                        fprintf(output, "    sw $a%d, %d($sp)     # Store param '%s'\n",
+                                paramNum, paramOffset, param->data.param.name);
+                    }
                 }
                 paramNum++;
                 param = param->data.param.next;
@@ -437,9 +565,17 @@ void genStmt(ASTNode* node) {
 
             if (node->data.returnStmt.value) {
                 /* Evaluate return expression */
+                int retType = exprType(node->data.returnStmt.value);
                 genExpr(node->data.returnStmt.value);
-                /* Move result to $v0 */
-                fprintf(output, "    move $v0, $t%d       # Set return value\n", tempReg - 1);
+
+                /* Move result to $v0 or $f0 depending on type */
+                if (retType == TYPE_FLOAT) {
+                    fprintf(output, "    mov.s $f0, $f%d      # Set float return value\n",
+                            (tempFloatReg > 0) ? tempFloatReg - 2 : 0);
+                } else {
+                    int regNum = (tempReg > 0) ? tempReg - 1 : 0;
+                    fprintf(output, "    move $v0, $t%d       # Set return value\n", regNum);
+                }
             }
 
             /* Jump to function epilogue (handled in NODE_FUNC_DECL) */
@@ -509,6 +645,10 @@ void generateMIPS(ASTNode* root, const char* filename) {
     /* Emit collected string literals */
     for (int i = 0; i < strLitCount; i++) {
         fprintf(output, "str_literal_%d: .asciiz \"%s\"\n", i, strLiterals[i]);
+    }
+    /* Emit collected float literals */
+    for (int i = 0; i < floatLitCount; i++) {
+        fprintf(output, "float_literal_%d: .float %f\n", i, floatLiterals[i]);
     }
     fprintf(output, "\n.text\n");
     fprintf(output, ".globl main\n");
