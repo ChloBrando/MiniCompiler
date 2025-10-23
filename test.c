@@ -1,41 +1,37 @@
-// Simple test - basic types and operations
+int parameter;
+parameter = 10;
 
-print("=== Simple Test ===");
-
-// Basic variables
-int x;
-x = 10;
-print(x);
-
-float y;
-y = 3.14;
-print(y);
-
-string s;
-s = "Hello";
-print(s);
-
-// Array
-int arr[2];
-arr[0] = 5;
-arr[1] = arr[0] + 3;
-print(arr[1]);
-
-// Function
-# addNums(int a, int b) {
-    return a + b;
+# bigger(int number){
+    int bNumber;
+    bNumber = number + number;
+    return bNumber;
 }
 
-# return5() {
-    return 5;
+# smaller(int number){
+    int sNumber;
+    sNumber = number - 5;
+    return sNumber;
 }
 
-int result;
-result = addNums(4, 6);
-print(result);
+int resultBigger;
+resultBigger = bigger(parameter);
+print(resultBigger);
 
-int five;
-five = return5();
-print(five);
+int resultSmaller;
+resultSmaller = smaller(parameter);
+print(resultSmaller);
 
-print("=== Done ===");
+
+
+// Basic Array - Declaration and Assignment
+int numbers[5];
+numbers[0] = 10;
+numbers[1] = 20;
+numbers[2] = 30;
+numbers[3] = 40;
+numbers[4] = 50;
+
+// Print array elements
+print(numbers[0]);  // Prints 10
+print(numbers[2]);  // Prints 30
+print(numbers[4]);  // Prints 50

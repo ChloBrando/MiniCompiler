@@ -221,6 +221,14 @@ void genExpr(ASTNode* node) {
                     fprintf(output, "    # Subtraction\n");
                     fprintf(output, "    sub $t%d, $t%d, $t%d\n", leftReg, leftReg, rightReg);
                     tempReg = leftReg + 1;  // Result in leftReg
+                } else if (node->data.binop.op == '*') {
+                    fprintf(output, "    # Multiplication\n");
+                    fprintf(output, "    mul $t%d, $t%d, $t%d\n", leftReg, leftReg, rightReg);
+                    tempReg = leftReg + 1;  // Result in leftReg
+                } else if (node->data.binop.op == '/') {
+                    fprintf(output, "    # Division\n");
+                    fprintf(output, "    div $t%d, $t%d, $t%d\n", leftReg, leftReg, rightReg);
+                    tempReg = leftReg + 1;  // Result in leftReg
                 }
             }
             break;

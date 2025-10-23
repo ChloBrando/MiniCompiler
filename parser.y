@@ -128,13 +128,21 @@ expr:
         $$ = createStringLit($1);
         free($1);
     }
-    | expr '+' expr { 
+    | expr '+' expr {
         /* Addition operation - builds binary tree */
         $$ = createBinOp('+', $1, $3);  /* Left child, op, right child */
     }
-    | expr '-' expr { 
-        /* Subtraction operation */ 
+    | expr '-' expr {
+        /* Subtraction operation */
         $$ = createBinOp('-', $1, $3);  /* Left child, op, right child */
+    }
+    | expr '*' expr {
+        /* Multiplication operation */
+        $$ = createBinOp('*', $1, $3);
+    }
+    | expr '/' expr {
+        /* Division operation */
+        $$ = createBinOp('/', $1, $3);
     }
     | ID '[' expr ']' { 
         /* Array element access */

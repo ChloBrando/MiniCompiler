@@ -61,6 +61,20 @@ int exprType(ASTNode* node) {
                 if ((lt == TYPE_INT && rt == TYPE_FLOAT) || (lt == TYPE_FLOAT && rt == TYPE_INT)) return TYPE_FLOAT;
                 fprintf(stderr, "Semantic Error: '-' requires numeric operands\n");
                 return -1;
+            } else if (node->data.binop.op == '*') {
+                /* allow int*int -> int, float*float -> float, int*float -> float */
+                if (lt == TYPE_INT && rt == TYPE_INT) return TYPE_INT;
+                if (lt == TYPE_FLOAT && rt == TYPE_FLOAT) return TYPE_FLOAT;
+                if ((lt == TYPE_INT && rt == TYPE_FLOAT) || (lt == TYPE_FLOAT && rt == TYPE_INT)) return TYPE_FLOAT;
+                fprintf(stderr, "Semantic Error: '*' requires numeric operands\n");
+                return -1;
+            } else if (node->data.binop.op == '/') {
+                /* allow int/int -> int, float/float -> float, int/float -> float */
+                if (lt == TYPE_INT && rt == TYPE_INT) return TYPE_INT;
+                if (lt == TYPE_FLOAT && rt == TYPE_FLOAT) return TYPE_FLOAT;
+                if ((lt == TYPE_INT && rt == TYPE_FLOAT) || (lt == TYPE_FLOAT && rt == TYPE_INT)) return TYPE_FLOAT;
+                fprintf(stderr, "Semantic Error: '/' requires numeric operands\n");
+                return -1;
             }
             return -1;
         }
