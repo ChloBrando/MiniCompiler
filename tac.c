@@ -166,6 +166,36 @@ char* generateTACExpr(ASTNode* node) {
             return temp;  /* Return temp holding result */
         }
 
+        case NODE_COMPARE: {
+            char* left = generateTACExpr(node->data.compare.left);
+            char* right = generateTACExpr(node->data.compare.right);
+            char* temp = newTemp();
+
+            /* Generate comparison TAC instruction based on operator */
+            switch(node->data.compare.compOp) {
+                case '<':
+                    appendTAC(createTAC(TAC_LT, left, right, temp));
+                    break;
+                case '>':
+                    appendTAC(createTAC(TAC_GT, left, right, temp));
+                    break;
+                case 271: /* EQ token */
+                    appendTAC(createTAC(TAC_EQ, left, right, temp));
+                    break;
+                case 272: /* NE token */
+                    appendTAC(createTAC(TAC_NE, left, right, temp));
+                    break;
+                case 273: /* LE token */
+                    appendTAC(createTAC(TAC_LE, left, right, temp));
+                    break;
+                case 274: /* GE token */
+                    appendTAC(createTAC(TAC_GE, left, right, temp));
+                    break;
+            }
+
+            return temp;
+        }
+
         default:
             return NULL;
     }
@@ -258,6 +288,50 @@ void generateTAC(ASTNode* node) {
             }
             break;
         }
+
+        case NODE_IF: {
+            /* If statement: if (condition) then_stmt [else else_stmt] */
+            char* condResult = generateTACExpr(node->data.ifStmt.condition);
+            
+            /* Generate labels for control flow */
+            char* elseLabel = malloc(20);
+            char* endLabel = malloc(20);
+            sprintf(elseLabel, "else_%d", tacList.tempCount);
+            sprintf(endLabel, "endif_%d", tacList.tempCount++);
+            
+            /* Generate conditional jump */
+            appendTAC(createTAC(TAC_IFFALSE, condResult, elseLabel, NULL));
+            
+            /* Generate then statement */
+            generateTAC(node->data.ifStmt.thenStmt);
+            
+            if (node->data.ifStmt.elseStmt) {
+                /* Jump to end after then statement */
+                appendTAC(createTAC(TAC_GOTO, endLabel, NULL, NULL));
+                
+                /* Else label */
+                appendTAC(createTAC(TAC_LABEL, NULL, NULL, elseLabel));
+                
+                /* Generate else statement */
+                generateTAC(node->data.ifStmt.elseStmt);
+                
+                /* End label */
+                appendTAC(createTAC(TAC_LABEL, NULL, NULL, endLabel));
+            } else {
+                /* Simple if - else label is the end label */
+                appendTAC(createTAC(TAC_LABEL, NULL, NULL, elseLabel));
+            }
+            
+            break;
+        }
+
+        case NODE_FLOAT_ARRAY_DECL: {
+            /* Float array declaration */
+            char* sizeStr = malloc(20);
+            sprintf(sizeStr, "%d", node->data.arrayDecl.size);
+            appendTAC(createTAC(TAC_ARRAY_DECL, sizeStr, NULL, node->data.arrayDecl.name));
+            break;
+        }
             
         default:
             break;
@@ -340,6 +414,38 @@ void printTAC() {
             case TAC_FUNC_END:
                 printf("FUNC_END %s", curr->result);
                 printf("         // End of function '%s'\n", curr->result);
+                break;
+            case TAC_LT:
+                printf("%s = %s < %s", curr->result, curr->arg1, curr->arg2);
+                printf("     // Less than comparison\n");
+                break;
+            case TAC_GT:
+                printf("%s = %s > %s", curr->result, curr->arg1, curr->arg2);
+                printf("     // Greater than comparison\n");
+                break;
+            case TAC_EQ:
+                printf("%s = %s == %s", curr->result, curr->arg1, curr->arg2);
+                printf("     // Equality comparison\n");
+                break;
+            case TAC_NE:
+                printf("%s = %s != %s", curr->result, curr->arg1, curr->arg2);
+                printf("     // Not equal comparison\n");
+                break;
+            case TAC_LE:
+                printf("%s = %s <= %s", curr->result, curr->arg1, curr->arg2);
+                printf("     // Less than or equal comparison\n");
+                break;
+            case TAC_GE:
+                printf("%s = %s >= %s", curr->result, curr->arg1, curr->arg2);
+                printf("     // Greater than or equal comparison\n");
+                break;
+            case TAC_IFFALSE:
+                printf("IFFALSE %s GOTO %s", curr->arg1, curr->arg2);
+                printf("  // Conditional jump if false\n");
+                break;
+            case TAC_GOTO:
+                printf("GOTO %s", curr->arg1);
+                printf("             // Unconditional jump\n");
                 break;
             default:
                 break;
@@ -616,6 +722,24 @@ void optimizeTAC() {
 
             case TAC_FUNC_END:
                 newInstr = createTAC(TAC_FUNC_END, NULL, NULL, curr->result);
+                break;
+
+            /* Comparison operations - pass through for now */
+            case TAC_LT:
+            case TAC_GT:
+            case TAC_EQ:
+            case TAC_NE:
+            case TAC_LE:
+            case TAC_GE:
+                newInstr = createTAC(curr->op, curr->arg1, curr->arg2, curr->result);
+                break;
+
+            /* Control flow operations */
+            case TAC_IFFALSE:
+                newInstr = createTAC(TAC_IFFALSE, curr->arg1, curr->arg2, curr->result);
+                break;
+            case TAC_GOTO:
+                newInstr = createTAC(TAC_GOTO, curr->arg1, curr->arg2, curr->result);
                 break;
         }
 

@@ -34,13 +34,18 @@ ASTNode* root = NULL;          /* Root of the Abstract Syntax Tree */
 %token <fnum> FLOAT_NUM /* Float token carries a float value */
 %token <str> ID         /* Identifier token carries a string */
 %token INT FLOAT PRINT VAR STRING FUNCTION RETURN VOID
+%token IF ELSE          /* If statement tokens */
+%token EQ NE LE GE      /* Comparison operator tokens */
 %token <str> STRING_LITERAL
 
 /* NON-TERMINAL TYPES - Define what type each grammar rule returns */
-%type <node> program stmt_list stmt decl assign expr print_stmt func_decl param_list arg_list
+%type <node> program stmt_list stmt decl assign expr print_stmt func_decl param_list arg_list if_stmt
 
 /* OPERATOR PRECEDENCE AND ASSOCIATIVITY */
-%left '+' '-' /* Addition is left-associative: a+b+c = (a+b)+c */
+%left EQ NE             /* Equality operators (lowest precedence) */
+%left '<' '>' LE GE     /* Relational operators */
+%left '+' '-'           /* Addition/subtraction */
+%left '*' '/'           /* Multiplication/division (highest precedence) */
 
 %%
 
@@ -66,15 +71,17 @@ stmt_list:
     }
     ;
 
-/* STATEMENT TYPES - NOW INCLUDING FUNCTIONS */
+/* STATEMENT TYPES - NOW INCLUDING FUNCTIONS AND IF STATEMENTS */
 stmt:
     decl        /* Variable declaration */
     | assign    /* Assignment statement */
     | print_stmt /* Print statement */
     | func_decl  /* Function declaration */
+    | if_stmt   /* If statement */
     | expr ';'   /* Expression statement (for function calls) */
     | RETURN expr ';' { $$ = createReturn($2); }  /* Return with value */
     | RETURN ';'      { $$ = createReturn(NULL); } /* Return void */
+    | '{' stmt_list '}' { $$ = $2; }  /* Compound statement (block) */
     ;
 
 /* DECLARATION RULE - "int x;" and "int x[NUM];" and "float x;" */
@@ -89,6 +96,10 @@ decl:
     }
   | INT ID '[' NUM ']' ';' {
                 $$ = createArrayDecl($2, $4);
+                free($2);
+    }
+  | FLOAT ID '[' NUM ']' ';' {
+                $$ = createFloatArrayDecl($2, $4);
                 free($2);
     }
   | STRING ID ';' {
@@ -143,6 +154,34 @@ expr:
     | expr '/' expr {
         /* Division operation */
         $$ = createBinOp('/', $1, $3);
+    }
+    | expr '<' expr {
+        /* Less than comparison */
+        $$ = createCompareOp('<', $1, $3);
+    }
+    | expr '>' expr {
+        /* Greater than comparison */
+        $$ = createCompareOp('>', $1, $3);
+    }
+    | expr EQ expr {
+        /* Equality comparison */
+        $$ = createCompareOp(EQ, $1, $3);
+    }
+    | expr NE expr {
+        /* Not equal comparison */
+        $$ = createCompareOp(NE, $1, $3);
+    }
+    | expr LE expr {
+        /* Less than or equal comparison */
+        $$ = createCompareOp(LE, $1, $3);
+    }
+    | expr GE expr {
+        /* Greater than or equal comparison */
+        $$ = createCompareOp(GE, $1, $3);
+    }
+    | '(' expr ')' {
+        /* Parenthesized expression */
+        $$ = $2;
     }
     | ID '[' expr ']' { 
         /* Array element access */
@@ -210,6 +249,18 @@ arg_list:
     }
     | arg_list ',' expr { 
         $$ = createStmtList($1, $3);  /* Reuse stmt_list structure for args */
+    }
+    ;
+
+/* IF STATEMENT - "if (condition) statement" and "if (condition) statement else statement" */
+if_stmt:
+    IF '(' expr ')' stmt {
+        /* Simple if statement */
+        $$ = createIfNode($3, $5, NULL);
+    }
+    | IF '(' expr ')' stmt ELSE stmt {
+        /* If-else statement */
+        $$ = createIfNode($3, $5, $7);
     }
     ;
 

@@ -253,6 +253,41 @@ int addArrayVar(char* name, int size) {
     return offset;
 }
 
+int addFloatArrayVar(char* name, int size) {
+    /* Check for duplicate declaration IN CURRENT SCOPE ONLY */
+    if (isInCurrentScope(name)) {
+#if SYMTAB_DEBUG
+        printf("SYMBOL TABLE: Failed to add float array '%s' - already declared in current scope\n", name);
+#endif
+        return -1;
+    }
+
+    /* Get current scope */
+    Scope* scope = symtab.currentScope;
+
+    /* Add float array entry to current scope */
+    scope->vars[scope->count].name = strdup(name);
+    scope->vars[scope->count].offset = scope->nextOffset;
+    scope->vars[scope->count].isArray = 1;
+    scope->vars[scope->count].arraySize = size;
+    scope->vars[scope->count].type = 2; /* array of float */
+    scope->vars[scope->count].isFunction = 0;
+    scope->vars[scope->count].paramCount = 0;
+    scope->vars[scope->count].paramTypes = NULL;
+
+    /* Float arrays need size * 4 bytes (4 bytes per float) */
+    int offset = scope->nextOffset;
+    scope->nextOffset += size * 4;
+    scope->count++;
+
+#if SYMTAB_DEBUG
+    printf("SYMBOL TABLE: Added float array '%s[%d]' at offset %d\n", name, size, offset);
+    printSymTab();
+#endif
+
+    return offset;
+}
+
 /* Check if variable is an array */
 int isArrayVar(char* name) {
     Symbol* sym = lookupSymbol(name);

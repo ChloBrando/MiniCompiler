@@ -44,6 +44,7 @@ int addStringVar(char* name);    /* Add new variable (string), returns offset or
 int getVarOffset(char* name);    /* Get stack offset for variable, -1 if not found */
 int isVarDeclared(char* name);   /* Check if variable exists (1=yes, 0=no) */
 int addArrayVar(char* name, int size); /* Add new array variable, returns offset or -1 if duplicate */
+int addFloatArrayVar(char* name, int size); /* Add new float array variable, returns offset or -1 if duplicate */
 int isArrayVar(char* name);      /* Check if variable is an array (1=yes, 0=no) */
 int getArraySize(char* name); /* Get size of array variable, -1 if not found or not an array */
 int isStringVar(char* name);    /* Check if variable is a string (1=yes, 0=no) */

@@ -1,11 +1,8 @@
 .data
-str_literal_0: .asciiz "x is greater than y"
-str_literal_1: .asciiz "x equals 15"
-str_literal_2: .asciiz "x does not equal 15"
-str_literal_3: .asciiz "Fever detected!"
-str_literal_4: .asciiz "Normal temperature"
-float_literal_0: .float 98.599998
-float_literal_1: .float 100.000000
+str_literal_0: .asciiz "a is greater"
+str_literal_1: .asciiz "b is greater or equal"
+str_literal_2: .asciiz "they are equal"
+str_literal_3: .asciiz "they are not equal"
 
 .text
 .globl main
@@ -16,9 +13,9 @@ main:
 
 
 main_code:
-    # Declared x at offset 0
-    # Declared y at offset 4
-    li $t0, 15
+    # Declared a at offset 0
+    # Declared b at offset 4
+    li $t0, 5
     sw $t0, 0($sp)
     li $t0, 10
     sw $t0, 4($sp)
@@ -27,7 +24,7 @@ main_code:
     lw $t1, 4($sp)
     # Integer greater than
     slt $t2, $t1, $t0
-    beq $t2, $zero, endif_label_0
+    beq $t2, $zero, else_label_0
     # load address of string literal
     la $t3, str_literal_0
     # Print string expression
@@ -37,16 +34,27 @@ main_code:
     li $v0, 11
     li $a0, 10
     syscall
+    j endif_label_0
+else_label_0:
+    # load address of string literal
+    la $t0, str_literal_1
+    # Print string expression
+    move $a0, $t0
+    li $v0, 4
+    syscall
+    li $v0, 11
+    li $a0, 10
+    syscall
 endif_label_0:
     # If statement
     lw $t0, 0($sp)
-    li $t1, 15
+    lw $t1, 4($sp)
     # Integer equal
     xor $t2, $t0, $t1
     sltiu $t2, $t2, 1
     beq $t2, $zero, else_label_1
     # load address of string literal
-    la $t3, str_literal_1
+    la $t3, str_literal_2
     # Print string expression
     move $a0, $t3
     li $v0, 4
@@ -57,7 +65,7 @@ endif_label_0:
     j endif_label_1
 else_label_1:
     # load address of string literal
-    la $t0, str_literal_2
+    la $t0, str_literal_3
     # Print string expression
     move $a0, $t0
     li $v0, 4
@@ -66,46 +74,6 @@ else_label_1:
     li $a0, 10
     syscall
 endif_label_1:
-    # Declared float temperature at offset 8
-    # Load float literal 98.599998
-    la $t0, float_literal_0
-    lwc1 $f0, 0($t0)
-    swc1 $f0, 8($sp)
-    # If statement
-    lwc1 $f0, 8($sp)
-    # Load float literal 100.000000
-    la $t0, float_literal_1
-    lwc1 $f2, 0($t0)
-    # Float greater than or equal
-    c.lt.s $f0, $f2
-    bc1f float_true_0
-    li $t0, 0
-    j float_done_0
-float_true_0:
-    li $t0, 1
-float_done_0:
-    beq $t0, $zero, else_label_2
-    # load address of string literal
-    la $t1, str_literal_3
-    # Print string expression
-    move $a0, $t1
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-    j endif_label_2
-else_label_2:
-    # load address of string literal
-    la $t0, str_literal_4
-    # Print string expression
-    move $a0, $t0
-    li $v0, 4
-    syscall
-    li $v0, 11
-    li $a0, 10
-    syscall
-endif_label_2:
 
     # Exit program
     addi $sp, $sp, 400

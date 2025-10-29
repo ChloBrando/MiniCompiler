@@ -21,6 +21,8 @@
 "string"        { return STRING; }
 "return"        { return RETURN; }
 "void"          { return VOID; }
+"if"            { return IF; }
+"else"          { return ELSE; }
 
 [a-zA-Z_][a-zA-Z0-9_]* { 
     yylval.str = strdup(yytext);
@@ -57,6 +59,12 @@
 "*"             { return '*'; }
 "/"             { return '/'; }
 "="             { return '='; }
+"=="            { return EQ; }
+"!="            { return NE; }
+"<="            { return LE; }
+">="            { return GE; }
+"<"             { return '<'; }
+">"             { return '>'; }
 ";"             { return ';'; }
 "("             { return '('; }
 ")"             { return ')'; }

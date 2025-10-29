@@ -4,6 +4,7 @@
 #include "codegen.h"
 #include "symtab.h"
 #include "semantic.h"
+#include "parser.tab.h"
 
 FILE* output;
 int tempReg = 0;
@@ -64,6 +65,17 @@ void collectStringLiterals(ASTNode* node) {
             break;
         case NODE_RETURN:
             collectStringLiterals(node->data.returnStmt.value);
+            break;
+        case NODE_IF:
+            collectStringLiterals(node->data.ifStmt.condition);
+            collectStringLiterals(node->data.ifStmt.thenStmt);
+            if (node->data.ifStmt.elseStmt) {
+                collectStringLiterals(node->data.ifStmt.elseStmt);
+            }
+            break;
+        case NODE_COMPARE:
+            collectStringLiterals(node->data.compare.left);
+            collectStringLiterals(node->data.compare.right);
             break;
         default:
             break;
@@ -336,6 +348,141 @@ void genExpr(ASTNode* node) {
             break;
         }
 
+        case NODE_COMPARE: {
+            /* Comparison operations for if statements */
+            int leftType = exprType(node->data.compare.left);
+            int rightType = exprType(node->data.compare.right);
+            
+            genExpr(node->data.compare.left);
+            int leftReg = (leftType == TYPE_FLOAT) ? (tempFloatReg - 2) : (tempReg - 1);
+            
+            genExpr(node->data.compare.right);
+            int rightReg = (rightType == TYPE_FLOAT) ? (tempFloatReg - 2) : (tempReg - 1);
+            
+            int resultReg = getNextTemp();
+            
+            if (leftType == TYPE_FLOAT || rightType == TYPE_FLOAT) {
+                /* Handle float comparisons */
+                int leftFloatReg = leftReg;
+                int rightFloatReg = rightReg;
+                
+                /* Convert integers to float if needed */
+                if (leftType == TYPE_INT) {
+                    fprintf(output, "    # Convert left operand to float\n");
+                    fprintf(output, "    mtc1 $t%d, $f%d\n", leftReg, getNextFloatTemp());
+                    fprintf(output, "    cvt.s.w $f%d, $f%d\n", tempFloatReg-2, tempFloatReg-2);
+                    leftFloatReg = tempFloatReg - 2;
+                }
+                
+                if (rightType == TYPE_INT) {
+                    fprintf(output, "    # Convert right operand to float\n");
+                    fprintf(output, "    mtc1 $t%d, $f%d\n", rightReg, getNextFloatTemp());
+                    fprintf(output, "    cvt.s.w $f%d, $f%d\n", tempFloatReg-2, tempFloatReg-2);
+                    rightFloatReg = tempFloatReg - 2;
+                }
+                
+                /* Perform float comparison */
+                switch (node->data.compare.compOp) {
+                    case '<':
+                        fprintf(output, "    # Float less than\n");
+                        fprintf(output, "    c.lt.s $f%d, $f%d\n", leftFloatReg, rightFloatReg);
+                        fprintf(output, "    bc1t float_true_%d\n", resultReg);
+                        fprintf(output, "    li $t%d, 0\n", resultReg);
+                        fprintf(output, "    j float_done_%d\n", resultReg);
+                        fprintf(output, "float_true_%d:\n", resultReg);
+                        fprintf(output, "    li $t%d, 1\n", resultReg);
+                        fprintf(output, "float_done_%d:\n", resultReg);
+                        break;
+                    case LE:
+                        fprintf(output, "    # Float less than or equal\n");
+                        fprintf(output, "    c.le.s $f%d, $f%d\n", leftFloatReg, rightFloatReg);
+                        fprintf(output, "    bc1t float_true_%d\n", resultReg);
+                        fprintf(output, "    li $t%d, 0\n", resultReg);
+                        fprintf(output, "    j float_done_%d\n", resultReg);
+                        fprintf(output, "float_true_%d:\n", resultReg);
+                        fprintf(output, "    li $t%d, 1\n", resultReg);
+                        fprintf(output, "float_done_%d:\n", resultReg);
+                        break;
+                    case '>':
+                        fprintf(output, "    # Float greater than\n");
+                        fprintf(output, "    c.le.s $f%d, $f%d\n", leftFloatReg, rightFloatReg);
+                        fprintf(output, "    bc1f float_true_%d\n", resultReg);
+                        fprintf(output, "    li $t%d, 0\n", resultReg);
+                        fprintf(output, "    j float_done_%d\n", resultReg);
+                        fprintf(output, "float_true_%d:\n", resultReg);
+                        fprintf(output, "    li $t%d, 1\n", resultReg);
+                        fprintf(output, "float_done_%d:\n", resultReg);
+                        break;
+                    case GE:
+                        fprintf(output, "    # Float greater than or equal\n");
+                        fprintf(output, "    c.lt.s $f%d, $f%d\n", leftFloatReg, rightFloatReg);
+                        fprintf(output, "    bc1f float_true_%d\n", resultReg);
+                        fprintf(output, "    li $t%d, 0\n", resultReg);
+                        fprintf(output, "    j float_done_%d\n", resultReg);
+                        fprintf(output, "float_true_%d:\n", resultReg);
+                        fprintf(output, "    li $t%d, 1\n", resultReg);
+                        fprintf(output, "float_done_%d:\n", resultReg);
+                        break;
+                    case EQ:
+                        fprintf(output, "    # Float equal\n");
+                        fprintf(output, "    c.eq.s $f%d, $f%d\n", leftFloatReg, rightFloatReg);
+                        fprintf(output, "    bc1t float_true_%d\n", resultReg);
+                        fprintf(output, "    li $t%d, 0\n", resultReg);
+                        fprintf(output, "    j float_done_%d\n", resultReg);
+                        fprintf(output, "float_true_%d:\n", resultReg);
+                        fprintf(output, "    li $t%d, 1\n", resultReg);
+                        fprintf(output, "float_done_%d:\n", resultReg);
+                        break;
+                    case NE:
+                        fprintf(output, "    # Float not equal\n");
+                        fprintf(output, "    c.eq.s $f%d, $f%d\n", leftFloatReg, rightFloatReg);
+                        fprintf(output, "    bc1f float_true_%d\n", resultReg);
+                        fprintf(output, "    li $t%d, 0\n", resultReg);
+                        fprintf(output, "    j float_done_%d\n", resultReg);
+                        fprintf(output, "float_true_%d:\n", resultReg);
+                        fprintf(output, "    li $t%d, 1\n", resultReg);
+                        fprintf(output, "float_done_%d:\n", resultReg);
+                        break;
+                }
+                tempFloatReg = 0;
+            } else {
+                /* Integer comparisons */
+                switch (node->data.compare.compOp) {
+                    case '<':
+                        fprintf(output, "    # Integer less than\n");
+                        fprintf(output, "    slt $t%d, $t%d, $t%d\n", resultReg, leftReg, rightReg);
+                        break;
+                    case LE:
+                        fprintf(output, "    # Integer less than or equal\n");
+                        fprintf(output, "    slt $t%d, $t%d, $t%d\n", resultReg, rightReg, leftReg);
+                        fprintf(output, "    xori $t%d, $t%d, 1\n", resultReg, resultReg);
+                        break;
+                    case '>':
+                        fprintf(output, "    # Integer greater than\n");
+                        fprintf(output, "    slt $t%d, $t%d, $t%d\n", resultReg, rightReg, leftReg);
+                        break;
+                    case GE:
+                        fprintf(output, "    # Integer greater than or equal\n");
+                        fprintf(output, "    slt $t%d, $t%d, $t%d\n", resultReg, leftReg, rightReg);
+                        fprintf(output, "    xori $t%d, $t%d, 1\n", resultReg, resultReg);
+                        break;
+                    case EQ:
+                        fprintf(output, "    # Integer equal\n");
+                        fprintf(output, "    xor $t%d, $t%d, $t%d\n", resultReg, leftReg, rightReg);
+                        fprintf(output, "    sltiu $t%d, $t%d, 1\n", resultReg, resultReg);
+                        break;
+                    case NE:
+                        fprintf(output, "    # Integer not equal\n");
+                        fprintf(output, "    xor $t%d, $t%d, $t%d\n", resultReg, leftReg, rightReg);
+                        fprintf(output, "    sltu $t%d, $zero, $t%d\n", resultReg, resultReg);
+                        break;
+                }
+            }
+            
+            tempReg = resultReg + 1;
+            break;
+        }
+
         default:
             break;
     }
@@ -600,6 +747,49 @@ void genStmt(ASTNode* node) {
         case NODE_FUNC_CALL: {
             /* Function call as statement (ignore return value) */
             genExpr(node);
+            tempReg = 0;
+            break;
+        }
+
+        case NODE_IF: {
+            /* If statement: if (condition) then_stmt else else_stmt */
+            static int labelCounter = 0;
+            int currentLabel = labelCounter++;
+            
+            fprintf(output, "    # If statement\n");
+            
+            /* Generate condition */
+            genExpr(node->data.ifStmt.condition);
+            int condReg = tempReg - 1;
+            
+            /* Branch if condition is false */
+            if (node->data.ifStmt.elseStmt) {
+                /* Has else clause */
+                fprintf(output, "    beq $t%d, $zero, else_label_%d\n", condReg, currentLabel);
+                
+                /* Generate then statement */
+                genStmt(node->data.ifStmt.thenStmt);
+                
+                /* Jump over else clause */
+                fprintf(output, "    j endif_label_%d\n", currentLabel);
+                
+                /* Else clause */
+                fprintf(output, "else_label_%d:\n", currentLabel);
+                genStmt(node->data.ifStmt.elseStmt);
+                
+                /* End of if */
+                fprintf(output, "endif_label_%d:\n", currentLabel);
+            } else {
+                /* No else clause */
+                fprintf(output, "    beq $t%d, $zero, endif_label_%d\n", condReg, currentLabel);
+                
+                /* Generate then statement */
+                genStmt(node->data.ifStmt.thenStmt);
+                
+                /* End of if */
+                fprintf(output, "endif_label_%d:\n", currentLabel);
+            }
+            
             tempReg = 0;
             break;
         }

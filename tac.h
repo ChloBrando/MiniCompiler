@@ -26,7 +26,18 @@ typedef enum {
     TAC_CALL,           /* Function call: result = CALL func_name, num_params */
     TAC_RETURN,         /* Return value: RETURN value */
     TAC_FUNC_BEGIN,     /* Mark function start: FUNC_BEGIN name */
-    TAC_FUNC_END        /* Mark function end: FUNC_END name */
+    TAC_FUNC_END,       /* Mark function end: FUNC_END name */
+    /* Comparison operations */
+    TAC_LT,      /* Less than: result = arg1 < arg2 */
+    TAC_GT,      /* Greater than: result = arg1 > arg2 */
+    TAC_EQ,      /* Equal: result = arg1 == arg2 */
+    TAC_NE,      /* Not equal: result = arg1 != arg2 */
+    TAC_LE,      /* Less than or equal: result = arg1 <= arg2 */
+    TAC_GE,      /* Greater than or equal: result = arg1 >= arg2 */
+    /* Control flow */
+    TAC_IF,      /* If statement: IF condition */
+    TAC_GOTO,    /* Unconditional jump: GOTO label */
+    TAC_IFFALSE  /* Conditional jump: IFFALSE condition GOTO label */
 } TACOp;
 
 /* TAC INSTRUCTION STRUCTURE */

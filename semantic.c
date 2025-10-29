@@ -78,6 +78,23 @@ int exprType(ASTNode* node) {
             }
             return -1;
         }
+        case NODE_COMPARE: {
+            /* Comparison operations return int (0 or 1) */
+            int lt = exprType(node->data.compare.left);
+            int rt = exprType(node->data.compare.right);
+            if (lt == -1 || rt == -1) return -1;
+            
+            /* Allow comparisons between compatible types */
+            if ((lt == TYPE_INT || lt == TYPE_FLOAT) && (rt == TYPE_INT || rt == TYPE_FLOAT)) {
+                return TYPE_INT;  /* Comparisons return boolean (int) */
+            }
+            if (lt == TYPE_STRING && rt == TYPE_STRING) {
+                return TYPE_INT;  /* String comparisons return boolean */
+            }
+            
+            fprintf(stderr, "Semantic Error: incompatible types for comparison (left=%d right=%d)\n", lt, rt);
+            return -1;
+        }
         case NODE_FUNC_CALL: {
             /* Function calls always return int for now */
             /* In a full implementation, you'd look up the function's return type */
@@ -225,6 +242,36 @@ int checkStmt(ASTNode* node) {
         }
         case NODE_PARAM: {
             /* Parameters are handled in NODE_FUNC_DECL */
+            return 0;
+        }
+        case NODE_IF: {
+            /* Check if condition type */
+            int condType = exprType(node->data.ifStmt.condition);
+            if (condType == -1) {
+                fprintf(stderr, "Semantic Error: invalid if condition\n");
+                return -1;
+            }
+            
+            /* Check then statement */
+            if (checkStmt(node->data.ifStmt.thenStmt) != 0) {
+                return -1;
+            }
+            
+            /* Check else statement if it exists */
+            if (node->data.ifStmt.elseStmt) {
+                if (checkStmt(node->data.ifStmt.elseStmt) != 0) {
+                    return -1;
+                }
+            }
+            
+            return 0;
+        }
+        case NODE_FLOAT_ARRAY_DECL: {
+            int off = addFloatArrayVar(node->data.arrayDecl.name, node->data.arrayDecl.size);
+            if (off == -1) {
+                fprintf(stderr, "Semantic Error: float array '%s' already declared\n", node->data.arrayDecl.name);
+                return -1;
+            }
             return 0;
         }
         default:
