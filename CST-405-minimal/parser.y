@@ -24,20 +24,28 @@ ASTNode* root = NULL;          /* Root of the Abstract Syntax Tree */
  */
 %union {
     int num;                /* For integer literals */
+    float fnum;             /* For float literals */
     char* str;              /* For identifiers */
     struct ASTNode* node;   /* For AST nodes */
 }
 
 /* TOKEN DECLARATIONS with their semantic value types */
 %token <num> NUM        /* Number token carries an integer value */
+%token <fnum> FLOAT_NUM /* Float token carries a float value */
 %token <str> ID         /* Identifier token carries a string */
-%token INT PRINT VAR        /* Keywords have no semantic value */
+%token INT FLOAT PRINT VAR STRING FUNCTION RETURN VOID
+%token IF ELSE          /* If statement tokens */
+%token EQ NE LE GE      /* Comparison operator tokens */
+%token <str> STRING_LITERAL
 
 /* NON-TERMINAL TYPES - Define what type each grammar rule returns */
-%type <node> program stmt_list stmt decl assign expr print_stmt
+%type <node> program stmt_list stmt decl assign expr print_stmt func_decl param_list arg_list if_stmt
 
 /* OPERATOR PRECEDENCE AND ASSOCIATIVITY */
-%left '+' '-' /* Addition is left-associative: a+b+c = (a+b)+c */
+%left EQ NE             /* Equality operators (lowest precedence) */
+%left '<' '>' LE GE     /* Relational operators */
+%left '+' '-'           /* Addition/subtraction */
+%left '*' '/'           /* Multiplication/division (highest precedence) */
 
 %%
 
@@ -63,22 +71,40 @@ stmt_list:
     }
     ;
 
-/* STATEMENT TYPES - The three kinds of statements we support */
+/* STATEMENT TYPES - NOW INCLUDING FUNCTIONS AND IF STATEMENTS */
 stmt:
     decl        /* Variable declaration */
     | assign    /* Assignment statement */
     | print_stmt /* Print statement */
+    | func_decl  /* Function declaration */
+    | if_stmt   /* If statement */
+    | expr ';'   /* Expression statement (for function calls) */
+    | RETURN expr ';' { $$ = createReturn($2); }  /* Return with value */
+    | RETURN ';'      { $$ = createReturn(NULL); } /* Return void */
+    | '{' stmt_list '}' { $$ = $2; }  /* Compound statement (block) */
     ;
 
-/* DECLARATION RULE - "int x;" and "int x[NUM];" */
+/* DECLARATION RULE - "int x;" and "int x[NUM];" and "float x;" */
 decl:
-    INT ID ';' { 
-        $$ = createDecl($2);
-        free($2);
+    INT ID ';' {
+                $$ = createDecl($2);
+                free($2);
     }
-  | INT ID '[' NUM ']' ';' { 
-        $$ = createArrayDecl($2, $4);
-        free($2);
+  | FLOAT ID ';' {
+                $$ = createFloatDecl($2);
+                free($2);
+    }
+  | INT ID '[' NUM ']' ';' {
+                $$ = createArrayDecl($2, $4);
+                free($2);
+    }
+  | FLOAT ID '[' NUM ']' ';' {
+                $$ = createFloatArrayDecl($2, $4);
+                free($2);
+    }
+  | STRING ID ';' {
+            $$ = createStrDecl($2);
+            free($2);
     }
   ;
 
@@ -94,30 +120,83 @@ assign:
     }
   ;
 
-
 /* EXPRESSION RULES - Build expression trees */
 expr:
-    NUM { 
+    NUM {
         /* Literal number */
         $$ = createNum($1);  /* Create leaf node with number value */
     }
-    | ID { 
+    | FLOAT_NUM {
+        /* Literal float */
+        $$ = createFloatNum($1);  /* Create leaf node with float value */
+    }
+    | ID {
         /* Variable reference */
         $$ = createVar($1);  /* Create leaf node with variable name */
         free($1);            /* Free the identifier string */
     }
-    | expr '+' expr { 
+    | STRING_LITERAL {
+        $$ = createStringLit($1);
+        free($1);
+    }
+    | expr '+' expr {
         /* Addition operation - builds binary tree */
         $$ = createBinOp('+', $1, $3);  /* Left child, op, right child */
     }
-    | expr '-' expr { 
-        /* Subtraction operation */ 
+    | expr '-' expr {
+        /* Subtraction operation */
         $$ = createBinOp('-', $1, $3);  /* Left child, op, right child */
+    }
+    | expr '*' expr {
+        /* Multiplication operation */
+        $$ = createBinOp('*', $1, $3);
+    }
+    | expr '/' expr {
+        /* Division operation */
+        $$ = createBinOp('/', $1, $3);
+    }
+    | expr '<' expr {
+        /* Less than comparison */
+        $$ = createCompareOp('<', $1, $3);
+    }
+    | expr '>' expr {
+        /* Greater than comparison */
+        $$ = createCompareOp('>', $1, $3);
+    }
+    | expr EQ expr {
+        /* Equality comparison */
+        $$ = createCompareOp(EQ, $1, $3);
+    }
+    | expr NE expr {
+        /* Not equal comparison */
+        $$ = createCompareOp(NE, $1, $3);
+    }
+    | expr LE expr {
+        /* Less than or equal comparison */
+        $$ = createCompareOp(LE, $1, $3);
+    }
+    | expr GE expr {
+        /* Greater than or equal comparison */
+        $$ = createCompareOp(GE, $1, $3);
+    }
+    | '(' expr ')' {
+        /* Parenthesized expression */
+        $$ = $2;
     }
     | ID '[' expr ']' { 
         /* Array element access */
         $$ = createArrayAccess($1, $3);  /* $1=ID, $3=index expr */
         free($1);                         /* Free the identifier string */
+    }
+    | ID '(' ')' { 
+        /* Function call with no arguments */
+        $$ = createFuncCall($1, NULL);
+        free($1);
+    }
+    | ID '(' arg_list ')' { 
+        /* Function call with arguments */
+        $$ = createFuncCall($1, $3);
+        free($1);
     }
     ;
 
@@ -126,6 +205,62 @@ print_stmt:
     PRINT '(' expr ')' ';' { 
         /* Create print node with expression to print */
         $$ = createPrint($3);  /* $3 is the expression inside parens */
+    }
+    ;
+
+/* FUNCTION DECLARATION - "# funcName() { ... }" */
+func_decl:
+    FUNCTION ID '(' ')' '{' stmt_list '}' {
+        /* Function with no parameters */
+        $$ = createFuncDecl($2, NULL, $6);
+        free($2);
+    }
+    | FUNCTION ID '(' param_list ')' '{' stmt_list '}' {
+        /* Function with parameters */
+        $$ = createFuncDecl($2, $4, $7);
+        free($2);
+    }
+    ;
+
+/* PARAMETER LIST - "int x" or "float x" or "int x, float y, ..." */
+param_list:
+    INT ID {
+        $$ = createParam($2, "int");
+        free($2);
+    }
+    | FLOAT ID {
+        $$ = createParam($2, "float");
+        free($2);
+    }
+    | param_list ',' INT ID {
+        $$ = addParam($1, $4, "int");
+        free($4);
+    }
+    | param_list ',' FLOAT ID {
+        $$ = addParam($1, $4, "float");
+        free($4);
+    }
+    ;
+
+/* ARGUMENT LIST - "expr" or "expr, expr, ..." */
+arg_list:
+    expr { 
+        $$ = $1; 
+    }
+    | arg_list ',' expr { 
+        $$ = createStmtList($1, $3);  /* Reuse stmt_list structure for args */
+    }
+    ;
+
+/* IF STATEMENT - "if (condition) statement" and "if (condition) statement else statement" */
+if_stmt:
+    IF '(' expr ')' stmt {
+        /* Simple if statement */
+        $$ = createIfNode($3, $5, NULL);
+    }
+    | IF '(' expr ')' stmt ELSE stmt {
+        /* If-else statement */
+        $$ = createIfNode($3, $5, $7);
     }
     ;
 

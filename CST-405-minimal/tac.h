@@ -13,12 +13,31 @@
 typedef enum {
     TAC_ADD,     /* Addition: result = arg1 + arg2 */
     TAC_SUB,     /* Subtraction: result = arg1 - arg2 */
+    TAC_MUL,     /* Multiplication: result = arg1 * arg2 */
+    TAC_DIV,     /* Division: result = arg1 / arg2 */
     TAC_ASSIGN,  /* Assignment: result = arg1 */
     TAC_PRINT,   /* Print: print(arg1) */
     TAC_DECL,     /* Declaration: declare result */
     TAC_ARRAY_DECL,    /* Array declaration: declare array[size] */
     TAC_ARRAY_ASSIGN,  /* Array assignment: array[index] = value */
-    TAC_ARRAY_ACCESS   /* Array access: temp = array[index] */
+    TAC_ARRAY_ACCESS,   /* Array access: temp = array[index] */
+    TAC_LABEL,          /* Function entry point: LABEL func_name */
+    TAC_PARAM,          /* Pass parameter: PARAM arg */
+    TAC_CALL,           /* Function call: result = CALL func_name, num_params */
+    TAC_RETURN,         /* Return value: RETURN value */
+    TAC_FUNC_BEGIN,     /* Mark function start: FUNC_BEGIN name */
+    TAC_FUNC_END,       /* Mark function end: FUNC_END name */
+    /* Comparison operations */
+    TAC_LT,      /* Less than: result = arg1 < arg2 */
+    TAC_GT,      /* Greater than: result = arg1 > arg2 */
+    TAC_EQ,      /* Equal: result = arg1 == arg2 */
+    TAC_NE,      /* Not equal: result = arg1 != arg2 */
+    TAC_LE,      /* Less than or equal: result = arg1 <= arg2 */
+    TAC_GE,      /* Greater than or equal: result = arg1 >= arg2 */
+    /* Control flow */
+    TAC_IF,      /* If statement: IF condition */
+    TAC_GOTO,    /* Unconditional jump: GOTO label */
+    TAC_IFFALSE  /* Conditional jump: IFFALSE condition GOTO label */
 } TACOp;
 
 /* TAC INSTRUCTION STRUCTURE */
@@ -27,6 +46,7 @@ typedef struct TACInstr {
     char* arg1;             /* First operand (if needed) */
     char* arg2;             /* Second operand (for binary ops) */
     char* result;           /* Result/destination */
+    int paramCount;  // For CALL instruction: number of params
     struct TACInstr* next;  /* Linked list pointer */
 } TACInstr;
 
@@ -49,5 +69,6 @@ char* generateTACExpr(ASTNode* node);                             /* Generate TA
 void printTAC();                                                   /* Display unoptimized TAC */
 void optimizeTAC();                                                /* Apply optimizations */
 void printOptimizedTAC();                                          /* Display optimized TAC */
+void applyAdvancedOptimizations();                                 /* Apply advanced optimizations */
 
 #endif

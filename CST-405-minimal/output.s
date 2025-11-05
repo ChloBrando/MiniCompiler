@@ -5,52 +5,100 @@
 main:
     # Allocate stack space
     addi $sp, $sp, -400
+    j main_code        # Jump to main program
 
-    # Declared array data[4] at offset 0
-    # Declared index at offset 16
-    # Declared sum at offset 20
-    li $t0, 0
-    sw $t0, 16($sp)
-    lw $t0, 16($sp)
-    li $t1, 100
-    # Array assignment: data[index] = value
-    sll $t0, $t0, 2    # index * 4
-    addi $t2, $sp, 0   # base address
-    add $t2, $t2, $t0 # element address
-    sw $t1, 0($t2)     # store value
-    li $t0, 1
-    sw $t0, 16($sp)
-    lw $t0, 16($sp)
-    li $t1, 200
-    # Array assignment: data[index] = value
-    sll $t0, $t0, 2    # index * 4
-    addi $t2, $sp, 0   # base address
-    add $t2, $t2, $t0 # element address
-    sw $t1, 0($t2)     # store value
-    li $t0, 0
-    # Array access: data[index]
-    sll $t0, $t0, 2    # index * 4
-    addi $t1, $sp, 0   # base address
-    add $t1, $t1, $t0 # element address
-    lw $t1, 0($t1)     # load value
-    li $t2, 1
-    # Array access: data[index]
-    sll $t2, $t2, 2    # index * 4
-    addi $t3, $sp, 0   # base address
-    add $t3, $t3, $t2 # element address
-    lw $t3, 0($t3)     # load value
-    # Addition
-    add $t1, $t1, $t3
-    sw $t1, 20($sp)
-    lw $t0, 20($sp)
-    # Print integer
-    move $a0, $t0
+
+main_code:
+    # Declared a at offset 0
+    # Declared b at offset 4
+    li $t0, 5
+    sw $t0, 0($sp)
+    li $t0, 5
+    sw $t0, 4($sp)
+    # If statement
+    lw $t0, 0($sp)
+    lw $t1, 4($sp)
+    # Integer equal
+    xor $t2, $t0, $t1
+    sltiu $t2, $t2, 1
+    beq $t2, $zero, else_label_0
+    li $t3, 1
+    # Print integer (expr)
+    move $a0, $t3
     li $v0, 1
     syscall
-    # Print newline
     li $v0, 11
     li $a0, 10
     syscall
+    j endif_label_0
+else_label_0:
+    li $t0, 0
+    # Print integer (expr)
+    move $a0, $t0
+    li $v0, 1
+    syscall
+    li $v0, 11
+    li $a0, 10
+    syscall
+endif_label_0:
+    # If statement
+    lw $t0, 0($sp)
+    lw $t1, 4($sp)
+    # Integer not equal
+    xor $t2, $t0, $t1
+    sltu $t2, $zero, $t2
+    beq $t2, $zero, else_label_1
+    li $t3, 0
+    # Print integer (expr)
+    move $a0, $t3
+    li $v0, 1
+    syscall
+    li $v0, 11
+    li $a0, 10
+    syscall
+    j endif_label_1
+else_label_1:
+    li $t0, 1
+    # Print integer (expr)
+    move $a0, $t0
+    li $v0, 1
+    syscall
+    li $v0, 11
+    li $a0, 10
+    syscall
+endif_label_1:
+    # If statement
+    lw $t0, 0($sp)
+    lw $t1, 4($sp)
+    # Integer less than or equal
+    slt $t2, $t1, $t0
+    xori $t2, $t2, 1
+    beq $t2, $zero, endif_label_2
+    li $t3, 1
+    # Print integer (expr)
+    move $a0, $t3
+    li $v0, 1
+    syscall
+    li $v0, 11
+    li $a0, 10
+    syscall
+endif_label_2:
+    # If statement
+    lw $t0, 0($sp)
+    lw $t1, 4($sp)
+    # Integer greater than or equal
+    slt $t2, $t0, $t1
+    xori $t2, $t2, 1
+    beq $t2, $zero, endif_label_3
+    li $t3, 1
+    # Print integer (expr)
+    move $a0, $t3
+    li $v0, 1
+    syscall
+    li $v0, 11
+    li $a0, 10
+    syscall
+endif_label_3:
 
     # Exit program
     addi $sp, $sp, 400

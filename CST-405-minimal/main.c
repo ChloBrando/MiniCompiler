@@ -7,6 +7,8 @@
 #include "ast.h"
 #include "codegen.h"
 #include "tac.h"
+#include "semantic.h"
+#include "symtab.h"
 
 extern int yyparse();
 extern FILE* yyin;
@@ -53,6 +55,18 @@ int main(int argc, char* argv[]) {
         printAST(root, 0);
         printf("\n");
         
+        /* Initialize symbol table before semantic analysis */
+        initSymTab();
+
+        /* PHASE 2.5: Semantic analysis / type checking */
+        printf("┌──────────────────────────────────────────────────────────┐\n");
+        printf("│ PHASE 2.5: SEMANTIC ANALYSIS (TYPE CHECKING)             │\n");
+        printf("├──────────────────────────────────────────────────────────┤\n");
+        if (semanticCheck(root) != 0) {
+            printf("✗ Semantic errors detected, aborting.\n");
+            return 1;
+        }
+
         /* PHASE 3: Intermediate Code */
         printf("┌──────────────────────────────────────────────────────────┐\n");
         printf("│ PHASE 3: INTERMEDIATE CODE GENERATION                    │\n");

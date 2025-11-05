@@ -1,14 +1,37 @@
+int parameter;
+parameter = 10;
 
-int data[4];
-int index;
-int sum;
+# bigger(int number){
+    int bNumber;
+    bNumber = number + number;
+    return bNumber;
+}
 
-index = 0;
-data[index] = 100;
+# smaller(int number){
+    int sNumber;
+    sNumber = number - 5;
+    return sNumber;
+}
 
-index = 1;
-data[index] = 200;
+int resultBigger;
+resultBigger = bigger(parameter);
+print(resultBigger);
 
-sum = data[0] + data[1];
-print(sum);
-        
+int resultSmaller;
+resultSmaller = smaller(parameter);
+print(resultSmaller);
+
+
+
+// Basic Array - Declaration and Assignment
+int numbers[5];
+numbers[0] = 10;
+numbers[1] = 20;
+numbers[2] = 30;
+numbers[3] = 40;
+numbers[4] = 50;
+
+// Print array elements
+print(numbers[0]);  // Prints 10
+print(numbers[2]);  // Prints 30
+print(numbers[4]);  // Prints 50
