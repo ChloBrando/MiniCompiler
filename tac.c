@@ -196,6 +196,13 @@ char* generateTACExpr(ASTNode* node) {
             return temp;
         }
 
+        case NODE_INPUT: {
+            /* Generate TAC for input() - reads integer from user */
+            char* temp = newTemp();
+            appendTAC(createTAC(TAC_INPUT, NULL, NULL, temp));
+            return temp;
+        }
+
         default:
             return NULL;
     }
@@ -373,6 +380,10 @@ void printTAC() {
             case TAC_PRINT:
                 printf("PRINT %s", curr->arg1);
                 printf("          // Output value of %s\n", curr->arg1);
+                break;
+            case TAC_INPUT:
+                printf("%s = INPUT", curr->result);
+                printf("       // Read integer from user into %s\n", curr->result);
                 break;
             case TAC_ARRAY_DECL:
                 printf("ARRAY_DECL %s", curr->result);
@@ -913,6 +924,10 @@ void printOptimizedTAC() {
                 } else {
                     printf("          // Print variable\n");
                 }
+                break;
+            case TAC_INPUT:
+                printf("%s = INPUT", curr->result);
+                printf("       // Read integer from user\n");
                 break;
             case TAC_ARRAY_DECL:
                 printf("ARRAY_DECL %s\n", curr->result);

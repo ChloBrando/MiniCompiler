@@ -54,7 +54,8 @@ void enterScope();              // Push new scope (entering function)
 void exitScope();               // Pop scope (leaving function)
 int addFunction(char* name, char* returnType,
                 char** paramTypes, int paramCount);
-int addParameter(char* name, char* type);
+int addParameter(char* name, char* type, int isArray);
 Symbol* lookupSymbol(char* name);  // Search current + parent scopes
 int isInCurrentScope(char* name);  // Check only current scope
+int getCurrentScopeSize();  // Get total size of variables in current scope
 #endif

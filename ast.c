@@ -263,6 +263,14 @@ ASTNode* createPrint(ASTNode* expr) {
     return node;
 }
 
+/* Create an input statement node */
+ASTNode* createInput() {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_INPUT;
+    /* No additional data needed - input() takes no arguments */
+    return node;
+}
+
 /* Create a statement list node (links statements together) */
 ASTNode* createStmtList(ASTNode* stmt1, ASTNode* stmt2) {
     ASTNode* node = malloc(sizeof(ASTNode));
@@ -367,6 +375,7 @@ ASTNode* createParam(char* name, char* type) {
     node->type = NODE_PARAM;
     node->data.param.name = strdup(name);
     node->data.param.type = strdup(type);
+    node->data.param.isArray = 0;  /* Not an array parameter */
     node->data.param.next = NULL;
     return node;
 }
@@ -377,7 +386,34 @@ ASTNode* addParam(ASTNode* list, char* name, char* type) {
     if (!list) {
         return newParam;
     }
-    
+
+    // Find the end of the parameter list
+    ASTNode* current = list;
+    while (current->data.param.next) {
+        current = current->data.param.next;
+    }
+    current->data.param.next = newParam;
+    return list;
+}
+
+/* Create an array parameter node */
+ASTNode* createArrayParam(char* name, char* type) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = NODE_PARAM;
+    node->data.param.name = strdup(name);
+    node->data.param.type = strdup(type);
+    node->data.param.isArray = 1;  /* This is an array parameter */
+    node->data.param.next = NULL;
+    return node;
+}
+
+/* Add array parameter to existing parameter list */
+ASTNode* addArrayParam(ASTNode* list, char* name, char* type) {
+    ASTNode* newParam = createArrayParam(name, type);
+    if (!list) {
+        return newParam;
+    }
+
     // Find the end of the parameter list
     ASTNode* current = list;
     while (current->data.param.next) {
@@ -476,6 +512,10 @@ void printAST(ASTNode* node, int level) {
             printAST(node->data.expr, level + 1);
             break;
 
+        case NODE_INPUT:
+            printf("INPUT\n");
+            break;
+
         case NODE_STMT_LIST:
             /* Print statements in sequence at same level */
             printAST(node->data.stmtlist.stmt, level);
@@ -517,7 +557,11 @@ void printAST(ASTNode* node, int level) {
             break;
 
         case NODE_PARAM:
-            printf("PARAM: %s %s\n", node->data.param.type, node->data.param.name);
+            if (node->data.param.isArray) {
+                printf("PARAM: %s %s[]\n", node->data.param.type, node->data.param.name);
+            } else {
+                printf("PARAM: %s %s\n", node->data.param.type, node->data.param.name);
+            }
             if (node->data.param.next) {
                 printAST(node->data.param.next, level);
             }

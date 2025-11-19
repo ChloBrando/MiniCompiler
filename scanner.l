@@ -12,12 +12,14 @@
 /* Flex options to suppress warnings for unused functions */
 %option nounput
 %option noinput
+%option yylineno
 
 %%
 
 "int"           { return INT; }
 "float"         { return FLOAT; }
 "print"         { return PRINT; }
+"input"         { return INPUT; }
 "string"        { return STRING; }
 "return"        { return RETURN; }
 "void"          { return VOID; }
