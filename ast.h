@@ -30,6 +30,7 @@ typedef enum {
     NODE_FUNC_CALL,   /* Function call (e.g., add(5, 3)) */
     NODE_RETURN,      /* Return statement */
     NODE_IF,          /* If statement (e.g., if (x > 0) { ... } else { ... }) */
+    NODE_WHILE,       /* While loop (e.g., while (x > 0) { ... }) */
     NODE_INPUT        /* Input statement (e.g., input()) */
 } NodeType;
 
@@ -134,6 +135,12 @@ typedef struct ASTNode {
             struct ASTNode* thenStmt;       /* Statement to execute if true */
             struct ASTNode* elseStmt;       /* Statement to execute if false (can be NULL) */
         } ifStmt;
+
+        /* While loop structure (NODE_WHILE) */
+        struct {
+            struct ASTNode* condition;      /* Loop condition expression */
+            struct ASTNode* body;           /* Loop body statement */
+        } whileLoop;
     } data;
 } ASTNode;
 
@@ -171,6 +178,9 @@ ASTNode* createReturn(ASTNode* value);                           /* Create retur
 
 /* If statement AST construction function */
 ASTNode* createIfNode(ASTNode* condition, ASTNode* thenStmt, ASTNode* elseStmt); /* Create if statement node */
+
+/* While loop AST construction function */
+ASTNode* createWhileNode(ASTNode* condition, ASTNode* body); /* Create while loop node */
 
 /* AST DISPLAY FUNCTION */
 void printAST(ASTNode* node, int level);                        /* Pretty-print the AST */

@@ -48,6 +48,10 @@ static int calculateLocalVarSize(ASTNode* node) {
                 size += calculateLocalVarSize(node->data.ifStmt.elseStmt);
             }
             break;
+        case NODE_WHILE:
+            /* Check loop body for local declarations */
+            size = calculateLocalVarSize(node->data.whileLoop.body);
+            break;
         default:
             /* Other nodes don't declare local variables */
             break;
@@ -123,6 +127,10 @@ void collectStringLiterals(ASTNode* node) {
             if (node->data.ifStmt.elseStmt) {
                 collectStringLiterals(node->data.ifStmt.elseStmt);
             }
+            break;
+        case NODE_WHILE:
+            collectStringLiterals(node->data.whileLoop.condition);
+            collectStringLiterals(node->data.whileLoop.body);
             break;
         case NODE_COMPARE:
             collectStringLiterals(node->data.compare.left);
@@ -307,13 +315,13 @@ void genExpr(ASTNode* node) {
                 exit(1);
             }
 
-            /* Generate code for index expression */
-            genExpr(node->data.arrayAccess.index);
-            int indexReg = (tempReg > 0) ? tempReg - 1 : 0;
-
             /* Calculate array element address and load value */
             int baseOffset = getVarOffset(node->data.arrayAccess.name);
             int baseReg = getNextTemp();
+
+            /* Generate code for index expression */
+            genExpr(node->data.arrayAccess.index);
+            int indexReg = (tempReg == 0) ? 7 : tempReg - 1;
 
             fprintf(output, "    # Array access: %s[index]\n", node->data.arrayAccess.name);
 
@@ -685,18 +693,18 @@ void genStmt(ASTNode* node) {
                 exit(1);
             }
 
-            /* Generate code for index expression */
-            genExpr(node->data.arrayAssign.index);
-            int indexReg = tempReg - 1;
-
-            /* Generate code for value expression */
-            genExpr(node->data.arrayAssign.value);
-            int valueReg = tempReg - 1;
-
             /* Calculate array element address */
             int baseOffset = getVarOffset(node->data.arrayAssign.name);
             int addressReg = getNextTemp();
             int baseReg = getNextTemp();
+
+            /* Generate code for index expression */
+            genExpr(node->data.arrayAssign.index);
+            int indexReg = (tempReg == 0) ? 7 : tempReg - 1;
+
+            /* Generate code for value expression */
+            genExpr(node->data.arrayAssign.value);
+            int valueReg = (tempReg == 0) ? 7 : tempReg - 1;
 
             fprintf(output, "    # Array assignment: %s[index] = value\n",
                 node->data.arrayAssign.name);
@@ -881,6 +889,36 @@ void genStmt(ASTNode* node) {
                 fprintf(output, "endif_label_%d:\n", currentLabel);
             }
             
+            tempReg = 0;
+            break;
+        }
+
+        case NODE_WHILE: {
+            /* While loop: while (condition) body */
+            static int whileLabelCounter = 0;
+            int currentLabel = whileLabelCounter++;
+
+            fprintf(output, "    # While loop\n");
+
+            /* Start of loop - check condition */
+            fprintf(output, "while_start_%d:\n", currentLabel);
+
+            /* Generate condition */
+            genExpr(node->data.whileLoop.condition);
+            int condReg = (tempReg == 0) ? 7 : tempReg - 1;
+
+            /* Branch to end if condition is false */
+            fprintf(output, "    beq $t%d, $zero, while_end_%d\n", condReg, currentLabel);
+
+            /* Generate loop body */
+            genStmt(node->data.whileLoop.body);
+
+            /* Jump back to condition check */
+            fprintf(output, "    j while_start_%d\n", currentLabel);
+
+            /* End of loop */
+            fprintf(output, "while_end_%d:\n", currentLabel);
+
             tempReg = 0;
             break;
         }

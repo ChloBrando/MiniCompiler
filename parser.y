@@ -36,12 +36,12 @@ ASTNode* root = NULL;          /* Root of the Abstract Syntax Tree */
 %token <fnum> FLOAT_NUM /* Float token carries a float value */
 %token <str> ID         /* Identifier token carries a string */
 %token INT FLOAT PRINT INPUT VAR STRING FUNCTION RETURN VOID
-%token IF ELSE          /* If statement tokens */
+%token IF ELSE WHILE    /* Control flow tokens */
 %token EQ NE LE GE      /* Comparison operator tokens */
 %token <str> STRING_LITERAL
 
 /* NON-TERMINAL TYPES - Define what type each grammar rule returns */
-%type <node> program stmt_list stmt decl assign expr print_stmt func_decl param_list arg_list if_stmt
+%type <node> program stmt_list stmt decl assign expr print_stmt func_decl param_list arg_list if_stmt while_stmt
 
 /* OPERATOR PRECEDENCE AND ASSOCIATIVITY */
 %left EQ NE             /* Equality operators (lowest precedence) */
@@ -80,6 +80,7 @@ stmt:
     | print_stmt /* Print statement */
     | func_decl  /* Function declaration */
     | if_stmt   /* If statement */
+    | while_stmt /* While loop */
     | expr ';'   /* Expression statement (for function calls) */
     | RETURN expr ';' { $$ = createReturn($2); }  /* Return with value */
     | RETURN ';'      { $$ = createReturn(NULL); } /* Return void */
@@ -283,6 +284,13 @@ if_stmt:
     | IF '(' expr ')' stmt ELSE stmt {
         /* If-else statement */
         $$ = createIfNode($3, $5, $7);
+    }
+    ;
+
+while_stmt:
+    WHILE '(' expr ')' stmt {
+        /* While loop statement */
+        $$ = createWhileNode($3, $5);
     }
     ;
 

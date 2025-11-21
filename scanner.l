@@ -25,6 +25,7 @@
 "void"          { return VOID; }
 "if"            { return IF; }
 "else"          { return ELSE; }
+"while"         { return WHILE; }
 
 [a-zA-Z_][a-zA-Z0-9_]* { 
     yylval.str = strdup(yytext);
@@ -46,12 +47,12 @@
     }
 }
 
-[0-9]+\.[0-9]+  {
+-?[0-9]+\.[0-9]+  {
     yylval.fnum = atof(yytext);
     return FLOAT_NUM;
 }
 
-[0-9]+          {
+-?[0-9]+          {
     yylval.num = atoi(yytext);
     return NUM;
 }
@@ -78,6 +79,7 @@
 "#"             { return FUNCTION; }
 
 "//".*          { /* Skip single-line comments */ }
+"/*"([^*]|\*+[^*/])*\*+"/"  { /* Skip block comments */ }
 [ \t\n]         { }
 
 .               { printf("Lexical Error: Unknown character '%c'\n", *yytext); }

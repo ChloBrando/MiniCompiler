@@ -158,6 +158,11 @@ ASTNode* foldConstants(ASTNode* node) {
             }
             return node;
 
+        case NODE_WHILE:
+            node->data.whileLoop.condition = foldConstants(node->data.whileLoop.condition);
+            node->data.whileLoop.body = foldConstants(node->data.whileLoop.body);
+            return node;
+
         case NODE_FUNC_DECL:
             node->data.funcDecl.body = foldConstants(node->data.funcDecl.body);
             return node;
@@ -342,12 +347,27 @@ ASTNode* createIfNode(ASTNode* condition, ASTNode* thenStmt, ASTNode* elseStmt) 
         fprintf(stderr, "Error: Memory allocation failed for if node\n");
         exit(1);
     }
-    
+
     node->type = NODE_IF;
     node->data.ifStmt.condition = condition;
     node->data.ifStmt.thenStmt = thenStmt;
     node->data.ifStmt.elseStmt = elseStmt;  /* Can be NULL for simple if */
-    
+
+    return node;
+}
+
+/* Create a while loop node */
+ASTNode* createWhileNode(ASTNode* condition, ASTNode* body) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    if (!node) {
+        fprintf(stderr, "Error: Memory allocation failed for while node\n");
+        exit(1);
+    }
+
+    node->type = NODE_WHILE;
+    node->data.whileLoop.condition = condition;
+    node->data.whileLoop.body = body;
+
     return node;
 }
 
@@ -592,6 +612,14 @@ void printAST(ASTNode* node, int level) {
                 printf("%*sElse:\n", level * 2, "");
                 printAST(node->data.ifStmt.elseStmt, level + 1);
             }
+            break;
+
+        case NODE_WHILE:
+            printf("WHILE\n");
+            printf("%*sCondition:\n", level * 2, "");
+            printAST(node->data.whileLoop.condition, level + 1);
+            printf("%*sBody:\n", level * 2, "");
+            printAST(node->data.whileLoop.body, level + 1);
             break;
     }
 }

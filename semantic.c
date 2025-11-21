@@ -272,6 +272,21 @@ int checkStmt(ASTNode* node) {
             
             return 0;
         }
+        case NODE_WHILE: {
+            /* Check while condition type */
+            int condType = exprType(node->data.whileLoop.condition);
+            if (condType == -1) {
+                fprintf(stderr, "Semantic Error: invalid while condition\n");
+                return -1;
+            }
+
+            /* Check loop body */
+            if (checkStmt(node->data.whileLoop.body) != 0) {
+                return -1;
+            }
+
+            return 0;
+        }
         case NODE_FLOAT_ARRAY_DECL: {
             int off = addFloatArrayVar(node->data.arrayDecl.name, node->data.arrayDecl.size);
             if (off == -1) {

@@ -53,11 +53,12 @@
      VOID = 269,
      IF = 270,
      ELSE = 271,
-     EQ = 272,
-     NE = 273,
-     LE = 274,
-     GE = 275,
-     STRING_LITERAL = 276
+     WHILE = 272,
+     EQ = 273,
+     NE = 274,
+     LE = 275,
+     GE = 276,
+     STRING_LITERAL = 277
    };
 #endif
 /* Tokens.  */
@@ -75,11 +76,12 @@
 #define VOID 269
 #define IF 270
 #define ELSE 271
-#define EQ 272
-#define NE 273
-#define LE 274
-#define GE 275
-#define STRING_LITERAL 276
+#define WHILE 272
+#define EQ 273
+#define NE 274
+#define LE 275
+#define GE 276
+#define STRING_LITERAL 277
 
 
 
@@ -94,7 +96,7 @@ typedef union YYSTYPE
     struct ASTNode* node;   /* For AST nodes */
 }
 /* Line 1529 of yacc.c.  */
-#line 98 "parser.tab.h"
+#line 100 "parser.tab.h"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1
