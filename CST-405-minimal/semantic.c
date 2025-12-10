@@ -100,6 +100,9 @@ int exprType(ASTNode* node) {
             /* In a full implementation, you'd look up the function's return type */
             return TYPE_INT;
         }
+        case NODE_INPUT:
+            /* Input returns an integer */
+            return TYPE_INT;
         default:
             return -1;
     }
@@ -180,6 +183,9 @@ int checkStmt(ASTNode* node) {
             if (t == -1) return -1;
             return 0;
         }
+        case NODE_INPUT:
+            /* Input takes no arguments and returns an integer */
+            return 0;
         case NODE_STMT_LIST:
             if (checkStmt(node->data.stmtlist.stmt) != 0) return -1;
             if (checkStmt(node->data.stmtlist.next) != 0) return -1;
@@ -215,7 +221,7 @@ int checkStmt(ASTNode* node) {
             /* Add parameters to the new scope */
             ASTNode* param = node->data.funcDecl.params;
             while (param) {
-                int paramOffset = addParameter(param->data.param.name, param->data.param.type);
+                int paramOffset = addParameter(param->data.param.name, param->data.param.type, param->data.param.isArray);
                 if (paramOffset == -1) {
                     fprintf(stderr, "Semantic Error: duplicate parameter '%s'\n", param->data.param.name);
                     exitScope();
@@ -264,6 +270,21 @@ int checkStmt(ASTNode* node) {
                 }
             }
             
+            return 0;
+        }
+        case NODE_WHILE: {
+            /* Check while condition type */
+            int condType = exprType(node->data.whileLoop.condition);
+            if (condType == -1) {
+                fprintf(stderr, "Semantic Error: invalid while condition\n");
+                return -1;
+            }
+
+            /* Check loop body */
+            if (checkStmt(node->data.whileLoop.body) != 0) {
+                return -1;
+            }
+
             return 0;
         }
         case NODE_FLOAT_ARRAY_DECL: {

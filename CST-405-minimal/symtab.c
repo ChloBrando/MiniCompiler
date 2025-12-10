@@ -324,6 +324,14 @@ int isFloatVar(char* name) {
     return 0;  /* Not found or not a float */
 }
 
+/* Get the total size of all variables in the current scope */
+int getCurrentScopeSize() {
+    if (symtab.currentScope) {
+        return symtab.currentScope->nextOffset;
+    }
+    return 0;
+}
+
 /* Add a function to the symbol table */
 int addFunction(char* name, char* returnType, char** paramTypes, int paramCount) {
     /* Check for duplicate declaration IN CURRENT SCOPE ONLY */
@@ -367,9 +375,9 @@ int addFunction(char* name, char* returnType, char** paramTypes, int paramCount)
 }
 
 /* Add a parameter to the current scope (called when entering a function) */
-int addParameter(char* name, char* type) {
+int addParameter(char* name, char* type, int isArray) {
     /* Parameters are just variables in the function's local scope */
-    /* Now we properly track the type parameter */
+    /* Now we properly track the type parameter and array status */
 
     /* Check for duplicate parameter name IN CURRENT SCOPE ONLY */
     if (isInCurrentScope(name)) {
@@ -394,8 +402,8 @@ int addParameter(char* name, char* type) {
     scope->vars[scope->count].name = strdup(name);
     scope->vars[scope->count].offset = scope->nextOffset;
     scope->vars[scope->count].type = typeCode;
-    scope->vars[scope->count].isArray = 0;
-    scope->vars[scope->count].arraySize = 0;
+    scope->vars[scope->count].isArray = isArray;  /* Set array flag from parameter */
+    scope->vars[scope->count].arraySize = 0;      /* Array parameters don't have size */
     scope->vars[scope->count].isFunction = 0;
     scope->vars[scope->count].paramCount = 0;
     scope->vars[scope->count].paramTypes = NULL;

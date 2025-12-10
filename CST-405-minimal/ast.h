@@ -29,7 +29,9 @@ typedef enum {
     NODE_PARAM,       /* Function parameter */
     NODE_FUNC_CALL,   /* Function call (e.g., add(5, 3)) */
     NODE_RETURN,      /* Return statement */
-    NODE_IF           /* If statement (e.g., if (x > 0) { ... } else { ... }) */
+    NODE_IF,          /* If statement (e.g., if (x > 0) { ... } else { ... }) */
+    NODE_WHILE,       /* While loop (e.g., while (x > 0) { ... }) */
+    NODE_INPUT        /* Input statement (e.g., input()) */
 } NodeType;
 
 /* AST NODE STRUCTURE
@@ -112,6 +114,7 @@ typedef struct ASTNode {
         struct {
             char* name;                     /* Parameter name */
             char* type;                     /* Parameter type: "int" or "float" */
+            int isArray;                    /* 1 if array parameter, 0 otherwise */
             struct ASTNode* next;           /* Next parameter */
         } param;
 
@@ -132,6 +135,12 @@ typedef struct ASTNode {
             struct ASTNode* thenStmt;       /* Statement to execute if true */
             struct ASTNode* elseStmt;       /* Statement to execute if false (can be NULL) */
         } ifStmt;
+
+        /* While loop structure (NODE_WHILE) */
+        struct {
+            struct ASTNode* condition;      /* Loop condition expression */
+            struct ASTNode* body;           /* Loop body statement */
+        } whileLoop;
     } data;
 } ASTNode;
 
@@ -150,6 +159,7 @@ ASTNode* createStrDecl(char* name);                             /* Create string
 /* Add new functions here*/
 ASTNode* createAssign(char* var, ASTNode* value);               /* Create assignment node */
 ASTNode* createPrint(ASTNode* expr);                            /* Create print node */
+ASTNode* createInput();                                         /* Create input node */
 ASTNode* createStmtList(ASTNode* stmt1, ASTNode* stmt2);        /* Create statement list */
 
 ASTNode* createArrayDecl(char* name, int size);                 /* Create array declaration node */
@@ -161,11 +171,16 @@ ASTNode* createArrayAccess(char* name, ASTNode* index);          /* Create array
 ASTNode* createFuncDecl(char* name, ASTNode* params, ASTNode* body); /* Create function declaration node */
 ASTNode* createParam(char* name, char* type);                    /* Create parameter node */
 ASTNode* addParam(ASTNode* list, char* name, char* type);        /* Add parameter to list */
+ASTNode* createArrayParam(char* name, char* type);               /* Create array parameter node */
+ASTNode* addArrayParam(ASTNode* list, char* name, char* type);   /* Add array parameter to list */
 ASTNode* createFuncCall(char* name, ASTNode* args);              /* Create function call node */
 ASTNode* createReturn(ASTNode* value);                           /* Create return statement node */
 
 /* If statement AST construction function */
 ASTNode* createIfNode(ASTNode* condition, ASTNode* thenStmt, ASTNode* elseStmt); /* Create if statement node */
+
+/* While loop AST construction function */
+ASTNode* createWhileNode(ASTNode* condition, ASTNode* body); /* Create while loop node */
 
 /* AST DISPLAY FUNCTION */
 void printAST(ASTNode* node, int level);                        /* Pretty-print the AST */

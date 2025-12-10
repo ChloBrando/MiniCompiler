@@ -4,6 +4,7 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include "ast.h"
 #include "codegen.h"
 #include "tac.h"
@@ -15,6 +16,12 @@ extern FILE* yyin;
 extern ASTNode* root;
 
 int main(int argc, char* argv[]) {
+    clock_t start_time, end_time, phase_start;
+    double total_time, phase_time;
+    
+    // Start overall compilation timer
+    start_time = clock();
+    
     if (argc != 3) {
         printf("Usage: %s <input.c> <output.s>\n", argv[0]);
         printf("Example: ./minicompiler test.c output.s\n");
@@ -34,6 +41,7 @@ int main(int argc, char* argv[]) {
     printf("\n");
     
     /* PHASE 1: Lexical and Syntax Analysis */
+    phase_start = clock();
     printf("┌──────────────────────────────────────────────────────────┐\n");
     printf("│ PHASE 1: LEXICAL & SYNTAX ANALYSIS                       │\n");
     printf("├──────────────────────────────────────────────────────────┤\n");
@@ -44,21 +52,26 @@ int main(int argc, char* argv[]) {
     printf("└──────────────────────────────────────────────────────────┘\n");
     
     if (yyparse() == 0) {
-        printf("✓ Parse successful - program is syntactically correct!\n\n");
+        phase_time = ((double)(clock() - phase_start)) / CLOCKS_PER_SEC * 1000;
+        printf("✓ Parse successful - program is syntactically correct!\n");
+        printf("  ⏱  Phase 1 time: %.3f ms\n\n", phase_time);
         
         /* PHASE 2: AST Display */
+        phase_start = clock();
         printf("┌──────────────────────────────────────────────────────────┐\n");
         printf("│ PHASE 2: ABSTRACT SYNTAX TREE (AST)                      │\n");
         printf("├──────────────────────────────────────────────────────────┤\n");
         printf("│ Tree structure representing the program hierarchy:        │\n");
         printf("└──────────────────────────────────────────────────────────┘\n");
         printAST(root, 0);
-        printf("\n");
+        phase_time = ((double)(clock() - phase_start)) / CLOCKS_PER_SEC * 1000;
+        printf("\n  ⏱  Phase 2 time: %.3f ms\n\n", phase_time);
         
         /* Initialize symbol table before semantic analysis */
         initSymTab();
 
         /* PHASE 2.5: Semantic analysis / type checking */
+        phase_start = clock();
         printf("┌──────────────────────────────────────────────────────────┐\n");
         printf("│ PHASE 2.5: SEMANTIC ANALYSIS (TYPE CHECKING)             │\n");
         printf("├──────────────────────────────────────────────────────────┤\n");
@@ -66,8 +79,11 @@ int main(int argc, char* argv[]) {
             printf("✗ Semantic errors detected, aborting.\n");
             return 1;
         }
+        phase_time = ((double)(clock() - phase_start)) / CLOCKS_PER_SEC * 1000;
+        printf("  ⏱  Phase 2.5 time: %.3f ms\n", phase_time);
 
         /* PHASE 3: Intermediate Code */
+        phase_start = clock();
         printf("┌──────────────────────────────────────────────────────────┐\n");
         printf("│ PHASE 3: INTERMEDIATE CODE GENERATION                    │\n");
         printf("├──────────────────────────────────────────────────────────┤\n");
@@ -78,9 +94,11 @@ int main(int argc, char* argv[]) {
         initTAC();
         generateTAC(root);
         printTAC();
-        printf("\n");
+        phase_time = ((double)(clock() - phase_start)) / CLOCKS_PER_SEC * 1000;
+        printf("\n  ⏱  Phase 3 time: %.3f ms\n\n", phase_time);
         
         /* PHASE 4: Optimization */
+        phase_start = clock();
         printf("┌──────────────────────────────────────────────────────────┐\n");
         printf("│ PHASE 4: CODE OPTIMIZATION                               │\n");
         printf("├──────────────────────────────────────────────────────────┤\n");
@@ -90,9 +108,11 @@ int main(int argc, char* argv[]) {
         printf("└──────────────────────────────────────────────────────────┘\n");
         optimizeTAC();
         printOptimizedTAC();
-        printf("\n");
+        phase_time = ((double)(clock() - phase_start)) / CLOCKS_PER_SEC * 1000;
+        printf("\n  ⏱  Phase 4 time: %.3f ms\n\n", phase_time);
         
         /* PHASE 5: Code Generation */
+        phase_start = clock();
         printf("┌──────────────────────────────────────────────────────────┐\n");
         printf("│ PHASE 5: MIPS CODE GENERATION                            │\n");
         printf("├──────────────────────────────────────────────────────────┤\n");
@@ -102,12 +122,21 @@ int main(int argc, char* argv[]) {
         printf("│ • System calls for print operations                      │\n");
         printf("└──────────────────────────────────────────────────────────┘\n");
         generateMIPS(root, argv[2]);
+        phase_time = ((double)(clock() - phase_start)) / CLOCKS_PER_SEC * 1000;
         printf("✓ MIPS assembly code generated to: %s\n", argv[2]);
-        printf("\n");
+        printf("  ⏱  Phase 5 time: %.3f ms\n\n", phase_time);
+        
+        // Calculate total compilation time
+        end_time = clock();
+        total_time = ((double)(end_time - start_time)) / CLOCKS_PER_SEC * 1000;
         
         printf("╔════════════════════════════════════════════════════════════╗\n");
         printf("║                  COMPILATION SUCCESSFUL!                   ║\n");
         printf("║         Run the output file in a MIPS simulator           ║\n");
+        printf("╠════════════════════════════════════════════════════════════╣\n");
+        printf("║ PERFORMANCE METRICS                                        ║\n");
+        printf("╠════════════════════════════════════════════════════════════╣\n");
+        printf("║ Total Compilation Time: %8.3f ms                       ║\n", total_time);
         printf("╚════════════════════════════════════════════════════════════╝\n");
     } else {
         printf("✗ Parse failed - check your syntax!\n");

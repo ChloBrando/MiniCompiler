@@ -6,11 +6,66 @@
 #include "semantic.h"
 #include "parser.tab.h"
 
+/* Helper function to flatten argument list */
+static void collectArgs(ASTNode* node, ASTNode** argArray, int* count, int maxArgs) {
+    if (!node || *count >= maxArgs) return;
+
+    if (node->type == NODE_STMT_LIST) {
+        /* Recursively collect from left (stmt) first */
+        collectArgs(node->data.stmtlist.stmt, argArray, count, maxArgs);
+        /* Then collect from right (next) */
+        collectArgs(node->data.stmtlist.next, argArray, count, maxArgs);
+    } else {
+        /* This is an actual argument expression */
+        argArray[(*count)++] = node;
+    }
+}
+
+/* Helper function to calculate local variable storage size for a function body */
+static int calculateLocalVarSize(ASTNode* node) {
+    if (!node) return 0;
+
+    int size = 0;
+
+    switch (node->type) {
+        case NODE_DECL:
+            /* Regular variable: 4 bytes */
+            size = 4;
+            break;
+        case NODE_ARRAY_DECL:
+            /* Array: size * 4 bytes */
+            size = node->data.arrayDecl.size * 4;
+            break;
+        case NODE_STMT_LIST:
+            /* Recursively calculate for both stmt and next */
+            size = calculateLocalVarSize(node->data.stmtlist.stmt) +
+                   calculateLocalVarSize(node->data.stmtlist.next);
+            break;
+        case NODE_IF:
+            /* Check both then and else branches for local declarations */
+            size = calculateLocalVarSize(node->data.ifStmt.thenStmt);
+            if (node->data.ifStmt.elseStmt) {
+                size += calculateLocalVarSize(node->data.ifStmt.elseStmt);
+            }
+            break;
+        case NODE_WHILE:
+            /* Check loop body for local declarations */
+            size = calculateLocalVarSize(node->data.whileLoop.body);
+            break;
+        default:
+            /* Other nodes don't declare local variables */
+            break;
+    }
+
+    return size;
+}
+
 FILE* output;
 int tempReg = 0;
 int tempFloatReg = 0;  /* for $f0-$f7 temporaries */
 int strLabelCount = 0;  /* counter for unique string labels */
 int concatEmitted = 0;  /* emit concat helper only once */
+int currentFrameSize = 128;  /* Frame size for current function being generated */
 char* strLiterals[200];
 int strLitCount = 0;
 int floatLabelCount = 0; /* counter for float literal labels */
@@ -72,6 +127,10 @@ void collectStringLiterals(ASTNode* node) {
             if (node->data.ifStmt.elseStmt) {
                 collectStringLiterals(node->data.ifStmt.elseStmt);
             }
+            break;
+        case NODE_WHILE:
+            collectStringLiterals(node->data.whileLoop.condition);
+            collectStringLiterals(node->data.whileLoop.body);
             break;
         case NODE_COMPARE:
             collectStringLiterals(node->data.compare.left);
@@ -184,10 +243,10 @@ void genExpr(ASTNode* node) {
                 int rightType = exprType(node->data.binop.right);
 
                 genExpr(node->data.binop.left);
-                int leftReg = (leftType == TYPE_FLOAT) ? (tempFloatReg - 2) : (tempReg - 1);
+                int leftReg = (leftType == TYPE_FLOAT) ? (tempFloatReg - 2) : ((tempReg == 0) ? 7 : tempReg - 1);
 
                 genExpr(node->data.binop.right);
-                int rightReg = (rightType == TYPE_FLOAT) ? (tempFloatReg - 2) : (tempReg - 1);
+                int rightReg = (rightType == TYPE_FLOAT) ? (tempFloatReg - 2) : ((tempReg == 0) ? 7 : tempReg - 1);
 
                 /* Handle int->float conversion if needed */
                 int leftFloatReg = leftReg;
@@ -222,8 +281,10 @@ void genExpr(ASTNode* node) {
                 /* Integer arithmetic */
                 genExpr(node->data.binop.left);
                 int leftReg = tempReg - 1;
+                if (leftReg < 0) leftReg = 0;  // Safety check
                 genExpr(node->data.binop.right);
                 int rightReg = tempReg - 1;
+                if (rightReg < 0) rightReg = 0;  // Safety check
 
                 if (node->data.binop.op == '+') {
                     fprintf(output, "    # Addition\n");
@@ -239,7 +300,8 @@ void genExpr(ASTNode* node) {
                     tempReg = leftReg + 1;  // Result in leftReg
                 } else if (node->data.binop.op == '/') {
                     fprintf(output, "    # Division\n");
-                    fprintf(output, "    div $t%d, $t%d, $t%d\n", leftReg, leftReg, rightReg);
+                    fprintf(output, "    div $t%d, $t%d      # Divide: result in LO\n", leftReg, rightReg);
+                    fprintf(output, "    mflo $t%d           # Move quotient from LO\n", leftReg);
                     tempReg = leftReg + 1;  // Result in leftReg
                 }
             }
@@ -253,21 +315,39 @@ void genExpr(ASTNode* node) {
                 exit(1);
             }
 
-            /* Generate code for index expression */
-            genExpr(node->data.arrayAccess.index);
-            int indexReg = tempReg - 1;
-
             /* Calculate array element address and load value */
             int baseOffset = getVarOffset(node->data.arrayAccess.name);
-            int resultReg = getNextTemp();
+            int baseReg = getNextTemp();
+
+            /* Generate code for index expression */
+            genExpr(node->data.arrayAccess.index);
+            int indexReg = (tempReg == 0) ? 7 : tempReg - 1;
 
             fprintf(output, "    # Array access: %s[index]\n", node->data.arrayAccess.name);
+
+            /* For array parameters, the offset contains a POINTER to the array.
+             * For local arrays, the offset IS the base address.
+             * We detect array parameters by checking array size - parameters have size 0 */
+            int arraySize = getArraySize(node->data.arrayAccess.name);
+            if (arraySize == 0 || arraySize == -1) {
+                /* Likely an array parameter - load the pointer */
+                fprintf(output, "    lw $t%d, %d($sp)     # load array pointer (parameter)\n",
+                        baseReg, baseOffset);
+            } else {
+                /* Local array - use stack pointer + offset directly */
+                fprintf(output, "    addi $t%d, $sp, %d   # local array base address\n",
+                        baseReg, baseOffset);
+            }
+
             fprintf(output, "    sll $t%d, $t%d, 2    # index * 4\n", indexReg, indexReg);
-            fprintf(output, "    addi $t%d, $sp, %d   # base address\n", resultReg, baseOffset);
             fprintf(output, "    add $t%d, $t%d, $t%d # element address\n",
-                resultReg, resultReg, indexReg);
+                baseReg, baseReg, indexReg);
             fprintf(output, "    lw $t%d, 0($t%d)     # load value\n",
-                resultReg, resultReg);
+                baseReg, baseReg);
+
+            /* Result is now in baseReg, ensure tempReg points one past it */
+            tempReg = baseReg + 1;
+            if (tempReg > 7) tempReg = 0;
             break;
         }
 
@@ -275,71 +355,48 @@ void genExpr(ASTNode* node) {
             /* Function call: funcName(args) */
             fprintf(output, "    # Function call: %s\n", node->data.funcCall.name);
 
-            /* Step 1: Evaluate arguments and place in $a0-$a3 */
-            ASTNode* arg = node->data.funcCall.args;
-            int argNum = 0;
+            /* Step 1: Collect arguments into array by flattening stmt_list structure */
+            ASTNode* argArray[4] = {NULL, NULL, NULL, NULL};
+            int argCount = 0;
+            collectArgs(node->data.funcCall.args, argArray, &argCount, 4);
 
-            while (arg && argNum < 4) {
-                ASTNode* argExpr;
+            /* Step 2: Generate code for each argument */
+            for (int i = 0; i < argCount && i < 4; i++) {
+                /* Check if this argument is an array variable - pass address instead of value */
+                if (argArray[i]->type == NODE_VAR && isArrayVar(argArray[i]->data.name)) {
+                    /* For array arguments, pass the pointer */
+                    int offset = getVarOffset(argArray[i]->data.name);
+                    int argReg = getNextTemp();
+                    int arraySize = getArraySize(argArray[i]->data.name);
 
-                /* Extract actual expression from stmt_list structure */
-                if (arg->type == NODE_STMT_LIST) {
-                    /* Check if stmt is also a stmt_list (nested case for 3+ args) */
-                    if (arg->data.stmtlist.stmt &&
-                        arg->data.stmtlist.stmt->type == NODE_STMT_LIST) {
-                        /* Recursively process the nested stmt_list first */
-                        ASTNode* nested = arg->data.stmtlist.stmt;
-                        while (nested && argNum < 4) {
-                            if (nested->type == NODE_STMT_LIST) {
-                                genExpr(nested->data.stmtlist.stmt);
-                                int argReg = (tempReg > 0) ? tempReg - 1 : 0;
-                                fprintf(output, "    move $a%d, $t%d    # Arg %d\n",
-                                        argNum, argReg, argNum);
-                                argNum++;
-                                nested = nested->data.stmtlist.next;
-                            } else {
-                                genExpr(nested);
-                                int argReg = (tempReg > 0) ? tempReg - 1 : 0;
-                                fprintf(output, "    move $a%d, $t%d    # Arg %d\n",
-                                        argNum, argReg, argNum);
-                                argNum++;
-                                nested = NULL;
-                            }
-                        }
-                        /* Now process the final argument (next) */
-                        arg = arg->data.stmtlist.next;
-                        if (arg && argNum < 4) {
-                            genExpr(arg);
-                            int argReg = (tempReg > 0) ? tempReg - 1 : 0;
-                            fprintf(output, "    move $a%d, $t%d    # Arg %d\n",
-                                    argNum, argReg, argNum);
-                            argNum++;
-                        }
-                        break;
+                    if (arraySize == 0 || arraySize == -1) {
+                        /* Array parameter - load the pointer value */
+                        fprintf(output, "    lw $t%d, %d($sp)     # Arg %d: load array pointer (param)\n",
+                                argReg, offset, i);
                     } else {
-                        /* Normal case: stmt is an expression */
-                        argExpr = arg->data.stmtlist.stmt;
-                        genExpr(argExpr);
-                        int argReg = (tempReg > 0) ? tempReg - 1 : 0;
-                        fprintf(output, "    move $a%d, $t%d    # Arg %d\n",
-                                argNum, argReg, argNum);
-                        argNum++;
-                        arg = arg->data.stmtlist.next;
+                        /* Local array - compute its address */
+                        fprintf(output, "    addi $t%d, $sp, %d    # Arg %d: local array address\n",
+                                argReg, offset, i);
                     }
+                    fprintf(output, "    move $a%d, $t%d\n", i, argReg);
                 } else {
-                    /* Single argument */
-                    genExpr(arg);
+                    /* For non-array arguments, pass by value */
+                    genExpr(argArray[i]);
                     int argReg = (tempReg > 0) ? tempReg - 1 : 0;
-                    fprintf(output, "    move $a%d, $t%d    # Arg %d\n",
-                            argNum, argReg, argNum);
-                    argNum++;
-                    arg = NULL;
+                    fprintf(output, "    move $a%d, $t%d    # Arg %d\n", i, argReg, i);
                 }
             }
 
             /* Step 2: Call the function */
-            fprintf(output, "    jal %s             # Call function\n",
-                    node->data.funcCall.name);
+            /* Add func_ prefix to avoid MIPS instruction conflicts */
+            /* Special case: main is called as _user_main */
+            char funcLabel[256];
+            if (strcmp(node->data.funcCall.name, "main") == 0) {
+                snprintf(funcLabel, sizeof(funcLabel), "_user_main");
+            } else {
+                snprintf(funcLabel, sizeof(funcLabel), "func_%s", node->data.funcCall.name);
+            }
+            fprintf(output, "    jal %s             # Call function\n", funcLabel);
 
             /* Step 3: Get result from $v0 and put in temp register */
             int resultReg = getNextTemp();
@@ -348,16 +405,29 @@ void genExpr(ASTNode* node) {
             break;
         }
 
+        case NODE_INPUT: {
+            /* Input: read integer from user */
+            fprintf(output, "    # Read integer from user\n");
+            fprintf(output, "    li $v0, 5           # Syscall 5: read integer\n");
+            fprintf(output, "    syscall\n");
+
+            /* Move result to temp register */
+            int resultReg = getNextTemp();
+            fprintf(output, "    move $t%d, $v0      # Store input value\n", resultReg);
+
+            break;
+        }
+
         case NODE_COMPARE: {
             /* Comparison operations for if statements */
             int leftType = exprType(node->data.compare.left);
             int rightType = exprType(node->data.compare.right);
-            
+
             genExpr(node->data.compare.left);
-            int leftReg = (leftType == TYPE_FLOAT) ? (tempFloatReg - 2) : (tempReg - 1);
-            
+            int leftReg = (leftType == TYPE_FLOAT) ? (tempFloatReg - 2) : ((tempReg == 0) ? 7 : tempReg - 1);
+
             genExpr(node->data.compare.right);
-            int rightReg = (rightType == TYPE_FLOAT) ? (tempFloatReg - 2) : (tempReg - 1);
+            int rightReg = (rightType == TYPE_FLOAT) ? (tempFloatReg - 2) : ((tempReg == 0) ? 7 : tempReg - 1);
             
             int resultReg = getNextTemp();
             
@@ -535,19 +605,23 @@ void genStmt(ASTNode* node) {
 
             genExpr(node->data.assign.value);
 
+            /* Save the result register immediately after genExpr */
+            int resultReg = (tempReg > 0) ? tempReg - 1 : 0;
+            int resultFloatReg = (tempFloatReg > 0) ? tempFloatReg - 2 : 0;
+
             if (varType == TYPE_FLOAT) {
                 if (exprTypeVal == TYPE_INT) {
                     /* Convert int to float before storing */
                     fprintf(output, "    # Convert int to float for assignment\n");
-                    fprintf(output, "    mtc1 $t%d, $f%d\n", tempReg - 1, getNextFloatTemp());
+                    fprintf(output, "    mtc1 $t%d, $f%d\n", resultReg, getNextFloatTemp());
                     fprintf(output, "    cvt.s.w $f%d, $f%d\n", tempFloatReg-2, tempFloatReg-2);
                     fprintf(output, "    swc1 $f%d, %d($sp)\n", tempFloatReg - 2, offset);
                 } else {
-                    fprintf(output, "    swc1 $f%d, %d($sp)\n", tempFloatReg - 2, offset);
+                    fprintf(output, "    swc1 $f%d, %d($sp)\n", resultFloatReg, offset);
                 }
                 tempFloatReg = 0;
             } else {
-                fprintf(output, "    sw $t%d, %d($sp)\n", tempReg - 1, offset);
+                fprintf(output, "    sw $t%d, %d($sp)\n", resultReg, offset);
             }
             tempReg = 0;
             break;
@@ -619,24 +693,37 @@ void genStmt(ASTNode* node) {
                 exit(1);
             }
 
-            /* Generate code for index expression */
-            genExpr(node->data.arrayAssign.index);
-            int indexReg = tempReg - 1;
-
-            /* Generate code for value expression */
-            genExpr(node->data.arrayAssign.value);
-            int valueReg = tempReg - 1;
-
             /* Calculate array element address */
             int baseOffset = getVarOffset(node->data.arrayAssign.name);
             int addressReg = getNextTemp();
+            int baseReg = getNextTemp();
+
+            /* Generate code for index expression */
+            genExpr(node->data.arrayAssign.index);
+            int indexReg = (tempReg == 0) ? 7 : tempReg - 1;
+
+            /* Generate code for value expression */
+            genExpr(node->data.arrayAssign.value);
+            int valueReg = (tempReg == 0) ? 7 : tempReg - 1;
 
             fprintf(output, "    # Array assignment: %s[index] = value\n",
                 node->data.arrayAssign.name);
+
+            /* Check if array parameter (size 0) or local array */
+            int arraySize = getArraySize(node->data.arrayAssign.name);
+            if (arraySize == 0 || arraySize == -1) {
+                /* Array parameter - load the pointer */
+                fprintf(output, "    lw $t%d, %d($sp)     # load array pointer (parameter)\n",
+                        baseReg, baseOffset);
+            } else {
+                /* Local array - use stack pointer + offset */
+                fprintf(output, "    addi $t%d, $sp, %d   # local array base address\n",
+                        baseReg, baseOffset);
+            }
+
             fprintf(output, "    sll $t%d, $t%d, 2    # index * 4\n", indexReg, indexReg);
-            fprintf(output, "    addi $t%d, $sp, %d   # base address\n", addressReg, baseOffset);
             fprintf(output, "    add $t%d, $t%d, $t%d # element address\n",
-                addressReg, addressReg, indexReg);
+                addressReg, baseReg, indexReg);
             fprintf(output, "    sw $t%d, 0($t%d)     # store value\n",
                 valueReg, addressReg);
             tempReg = 0;
@@ -650,7 +737,14 @@ void genStmt(ASTNode* node) {
             addFunction(node->data.funcDecl.name, "int", NULL, 0);
 
             fprintf(output, "\n# Function: %s\n", node->data.funcDecl.name);
-            fprintf(output, "%s:\n", node->data.funcDecl.name);
+
+            /* Prefix all user functions with func_ to avoid MIPS instruction conflicts */
+            /* Special case: main becomes _user_main for readability */
+            if (strcmp(node->data.funcDecl.name, "main") == 0) {
+                fprintf(output, "_user_main:\n");
+            } else {
+                fprintf(output, "func_%s:\n", node->data.funcDecl.name);
+            }
 
             /* Enter new scope for function */
             enterScope();
@@ -659,19 +753,20 @@ void genStmt(ASTNode* node) {
             ASTNode* param = node->data.funcDecl.params;
             int paramNum = 0;
             while (param && paramNum < 4) {
-                addParameter(param->data.param.name, param->data.param.type);
+                addParameter(param->data.param.name, param->data.param.type, param->data.param.isArray);
                 param = param->data.param.next;
                 paramNum++;
             }
 
             /* PROLOGUE: Set up stack frame */
-            /* Calculate frame size: 8 bytes (ra + fp) + local variables */
-            int frameSize = 32;  /* Start with 32 bytes for simplicity */
+            /* Use a generous fixed frame size to prevent stack corruption */
+            /* This ensures $ra and $fp are never overwritten by local variables or parameters */
+            currentFrameSize = 128;  /* 128 bytes should handle most functions */
 
             fprintf(output, "    # Function prologue\n");
-            fprintf(output, "    addi $sp, $sp, -%d    # Allocate stack frame\n", frameSize);
-            fprintf(output, "    sw $ra, %d($sp)      # Save return address\n", frameSize - 4);
-            fprintf(output, "    sw $fp, %d($sp)      # Save frame pointer\n", frameSize - 8);
+            fprintf(output, "    addi $sp, $sp, -%d    # Allocate stack frame\n", currentFrameSize);
+            fprintf(output, "    sw $ra, %d($sp)      # Save return address\n", currentFrameSize - 4);
+            fprintf(output, "    sw $fp, %d($sp)      # Save frame pointer\n", currentFrameSize - 8);
             fprintf(output, "    move $fp, $sp        # Set new frame pointer\n");
 
             /* Parameters are in $a0-$a3 (or $f12-$f14 for floats), store them on stack */
@@ -702,10 +797,15 @@ void genStmt(ASTNode* node) {
 
             /* EPILOGUE: Default return (if no explicit return) */
             fprintf(output, "    # Function epilogue (default return)\n");
-            fprintf(output, "%s_return:\n", node->data.funcDecl.name);
-            fprintf(output, "    lw $fp, %d($sp)      # Restore frame pointer\n", frameSize - 8);
-            fprintf(output, "    lw $ra, %d($sp)      # Restore return address\n", frameSize - 4);
-            fprintf(output, "    addi $sp, $sp, %d    # Deallocate stack frame\n", frameSize);
+            /* Add func_ prefix to epilogue label too */
+            if (strcmp(node->data.funcDecl.name, "main") == 0) {
+                fprintf(output, "_user_main_return:\n");
+            } else {
+                fprintf(output, "func_%s_return:\n", node->data.funcDecl.name);
+            }
+            fprintf(output, "    lw $fp, %d($sp)      # Restore frame pointer\n", currentFrameSize - 8);
+            fprintf(output, "    lw $ra, %d($sp)      # Restore return address\n", currentFrameSize - 4);
+            fprintf(output, "    addi $sp, $sp, %d    # Deallocate stack frame\n", currentFrameSize);
             fprintf(output, "    jr $ra               # Return to caller\n");
 
             /* Exit function scope */
@@ -735,10 +835,9 @@ void genStmt(ASTNode* node) {
 
             /* Jump to function epilogue (handled in NODE_FUNC_DECL) */
             /* For now, inline the epilogue here */
-            int frameSize = 32;
-            fprintf(output, "    lw $fp, %d($sp)      # Restore frame pointer\n", frameSize - 8);
-            fprintf(output, "    lw $ra, %d($sp)      # Restore return address\n", frameSize - 4);
-            fprintf(output, "    addi $sp, $sp, %d    # Deallocate stack frame\n", frameSize);
+            fprintf(output, "    lw $fp, %d($sp)      # Restore frame pointer\n", currentFrameSize - 8);
+            fprintf(output, "    lw $ra, %d($sp)      # Restore return address\n", currentFrameSize - 4);
+            fprintf(output, "    addi $sp, $sp, %d    # Deallocate stack frame\n", currentFrameSize);
             fprintf(output, "    jr $ra               # Return to caller\n");
 
             break;
@@ -790,6 +889,36 @@ void genStmt(ASTNode* node) {
                 fprintf(output, "endif_label_%d:\n", currentLabel);
             }
             
+            tempReg = 0;
+            break;
+        }
+
+        case NODE_WHILE: {
+            /* While loop: while (condition) body */
+            static int whileLabelCounter = 0;
+            int currentLabel = whileLabelCounter++;
+
+            fprintf(output, "    # While loop\n");
+
+            /* Start of loop - check condition */
+            fprintf(output, "while_start_%d:\n", currentLabel);
+
+            /* Generate condition */
+            genExpr(node->data.whileLoop.condition);
+            int condReg = (tempReg == 0) ? 7 : tempReg - 1;
+
+            /* Branch to end if condition is false */
+            fprintf(output, "    beq $t%d, $zero, while_end_%d\n", condReg, currentLabel);
+
+            /* Generate loop body */
+            genStmt(node->data.whileLoop.body);
+
+            /* Jump back to condition check */
+            fprintf(output, "    j while_start_%d\n", currentLabel);
+
+            /* End of loop */
+            fprintf(output, "while_end_%d:\n", currentLabel);
+
             tempReg = 0;
             break;
         }
@@ -851,7 +980,7 @@ void generateMIPS(ASTNode* root, const char* filename) {
     fprintf(output, "\n.text\n");
     fprintf(output, ".globl main\n");
     fprintf(output, "main:\n");
-    
+
     // Allocate stack space (max 100 variables * 4 bytes)
     fprintf(output, "    # Allocate stack space\n");
     fprintf(output, "    addi $sp, $sp, -400\n");
@@ -866,12 +995,23 @@ void generateMIPS(ASTNode* root, const char* filename) {
     // Second pass: Generate non-function statements
     genStatementsOnly(root);
     
+    // Call the user's main function if it exists
+    fprintf(output, "\n    # Call user main function\n");
+    fprintf(output, "    jal _user_main\n");
+    
     // Program exit
     fprintf(output, "\n    # Exit program\n");
     fprintf(output, "    addi $sp, $sp, 400\n");
     fprintf(output, "    li $v0, 10\n");
     fprintf(output, "    syscall\n");
-    
+
+    /* Infinite loop to catch any execution past exit */
+    fprintf(output, "\n# Infinite loop to prevent bad instruction exceptions\n");
+    fprintf(output, "__post_exit_stub:\n");
+    fprintf(output, "    li $v0, 10\n");
+    fprintf(output, "    syscall\n");
+    fprintf(output, "    j __post_exit_stub    # Loop forever\n");
+
     /* Emit concat helper if needed */
     if (strLitCount > 0 && !concatEmitted) {
         concatEmitted = 1;

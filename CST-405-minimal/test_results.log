@@ -1,0 +1,124 @@
+==========================================
+WHILE LOOP AND ORDER OF OPERATIONS TESTS
+==========================================
+
+==========================================
+WHILE LOOP TESTS
+==========================================
+
+[0;34mTesting: Basic While Loop[0m
+File: test_while_basic.c
+Expected: 0
+1
+2
+3
+4
+5
+Actual:   0
+1
+2
+3
+4
+5
+[0;32m✓ PASSED[0m
+
+[0;34mTesting: While Loop Accumulator (Factorial)[0m
+File: test_while_accumulator.c
+Expected: 120
+Actual:   120
+[0;32m✓ PASSED[0m
+
+[0;34mTesting: Nested While Loops[0m
+File: test_while_nested.c
+Expected: 0
+0
+1
+2
+1
+0
+1
+2
+Actual:   0
+0
+1
+2
+1
+0
+1
+2
+[0;32m✓ PASSED[0m
+
+[0;34mTesting: While Loop Complex Conditions[0m
+File: test_while_condition.c
+Expected: 10
+9
+8
+7
+6
+Actual:   10
+9
+8
+7
+6
+[0;32m✓ PASSED[0m
+
+==========================================
+ORDER OF OPERATIONS TESTS
+==========================================
+
+[0;34mTesting: Multiplication before Addition[0m
+File: test_order_basic.c
+Expected: 14
+Actual:   14
+[0;32m✓ PASSED[0m
+
+[0;34mTesting: Division before Subtraction[0m
+File: test_order_division.c
+Expected: 15
+Actual:   15
+[0;32m✓ PASSED[0m
+
+[0;34mTesting: Mixed Operations[0m
+File: test_order_mixed.c
+Expected: 18
+Actual:   18
+[0;32m✓ PASSED[0m
+
+[0;34mTesting: Left Associativity[0m
+File: test_order_associativity.c
+Expected: 12
+Actual:   12
+[0;32m✓ PASSED[0m
+
+[0;34mTesting: Comparison with Arithmetic[0m
+File: test_order_comparison.c
+Expected: 1
+Actual:   1
+[0;32m✓ PASSED[0m
+
+==========================================
+COMBINED FEATURE TESTS
+==========================================
+
+[0;34mTesting: While Loop + Order of Operations[0m
+File: test_combined_while_order.c
+Expected: 0
+2
+6
+12
+20
+Actual:   0
+2
+6
+12
+20
+[0;32m✓ PASSED[0m
+
+==========================================
+TEST SUMMARY
+==========================================
+Total Tests:  10
+Passed:       [0;32m10[0m
+Failed:       [0;31m0[0m
+==========================================
+[0;32mAll tests passed! ✓[0m

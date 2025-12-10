@@ -49,4 +49,7 @@ test: $(TARGET)
 	@echo "\n=== Generated MIPS Code ==="
 	@cat test.s
 
-.PHONY: all clean test
+run: $(TARGET)
+	@./$(TARGET) test.c test.s && printf "10\n5\n2\n" | spim -file test.s 2>&1 | head -30 | grep -v "Exception\|Bad address\|occurred"
+
+.PHONY: all clean test run

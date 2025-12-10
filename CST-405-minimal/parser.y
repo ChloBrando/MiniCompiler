@@ -13,6 +13,8 @@
 extern int yylex();      /* Get next token from scanner */
 extern int yyparse();    /* Parse the entire input */
 extern FILE* yyin;       /* Input file handle */
+extern int yylineno;     /* Line number from scanner */
+extern char* yytext;     /* Current token text */
 
 void yyerror(const char* s);  /* Error handling function */
 ASTNode* root = NULL;          /* Root of the Abstract Syntax Tree */
@@ -33,13 +35,13 @@ ASTNode* root = NULL;          /* Root of the Abstract Syntax Tree */
 %token <num> NUM        /* Number token carries an integer value */
 %token <fnum> FLOAT_NUM /* Float token carries a float value */
 %token <str> ID         /* Identifier token carries a string */
-%token INT FLOAT PRINT VAR STRING FUNCTION RETURN VOID
-%token IF ELSE          /* If statement tokens */
+%token INT FLOAT PRINT INPUT VAR STRING FUNCTION RETURN VOID
+%token IF ELSE WHILE    /* Control flow tokens */
 %token EQ NE LE GE      /* Comparison operator tokens */
 %token <str> STRING_LITERAL
 
 /* NON-TERMINAL TYPES - Define what type each grammar rule returns */
-%type <node> program stmt_list stmt decl assign expr print_stmt func_decl param_list arg_list if_stmt
+%type <node> program stmt_list stmt decl assign expr print_stmt func_decl param_list arg_list if_stmt while_stmt
 
 /* OPERATOR PRECEDENCE AND ASSOCIATIVITY */
 %left EQ NE             /* Equality operators (lowest precedence) */
@@ -78,6 +80,7 @@ stmt:
     | print_stmt /* Print statement */
     | func_decl  /* Function declaration */
     | if_stmt   /* If statement */
+    | while_stmt /* While loop */
     | expr ';'   /* Expression statement (for function calls) */
     | RETURN expr ';' { $$ = createReturn($2); }  /* Return with value */
     | RETURN ';'      { $$ = createReturn(NULL); } /* Return void */
@@ -193,10 +196,14 @@ expr:
         $$ = createFuncCall($1, NULL);
         free($1);
     }
-    | ID '(' arg_list ')' { 
+    | ID '(' arg_list ')' {
         /* Function call with arguments */
         $$ = createFuncCall($1, $3);
         free($1);
+    }
+    | INPUT '(' ')' {
+        /* Input statement - reads integer from user */
+        $$ = createInput();
     }
     ;
 
@@ -222,7 +229,7 @@ func_decl:
     }
     ;
 
-/* PARAMETER LIST - "int x" or "float x" or "int x, float y, ..." */
+/* PARAMETER LIST - "int x" or "float x" or "int x[]" or "int x, float y, ..." */
 param_list:
     INT ID {
         $$ = createParam($2, "int");
@@ -232,12 +239,28 @@ param_list:
         $$ = createParam($2, "float");
         free($2);
     }
+    | INT ID '[' ']' {
+        $$ = createArrayParam($2, "int");
+        free($2);
+    }
+    | FLOAT ID '[' ']' {
+        $$ = createArrayParam($2, "float");
+        free($2);
+    }
     | param_list ',' INT ID {
         $$ = addParam($1, $4, "int");
         free($4);
     }
     | param_list ',' FLOAT ID {
         $$ = addParam($1, $4, "float");
+        free($4);
+    }
+    | param_list ',' INT ID '[' ']' {
+        $$ = addArrayParam($1, $4, "int");
+        free($4);
+    }
+    | param_list ',' FLOAT ID '[' ']' {
+        $$ = addArrayParam($1, $4, "float");
         free($4);
     }
     ;
@@ -264,9 +287,30 @@ if_stmt:
     }
     ;
 
+while_stmt:
+    WHILE '(' expr ')' stmt {
+        /* While loop statement */
+        $$ = createWhileNode($3, $5);
+    }
+    ;
+
 %%
 
 /* ERROR HANDLING - Called by Bison when syntax error detected */
 void yyerror(const char* s) {
-    fprintf(stderr, "Syntax Error: %s\n", s);
+    fprintf(stderr, "\n");
+    fprintf(stderr, "╔════════════════════════════════════════════════════════════╗\n");
+    fprintf(stderr, "║                     SYNTAX ERROR DETECTED                  ║\n");
+    fprintf(stderr, "╚════════════════════════════════════════════════════════════╝\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "Error at line %d near token: '%s'\n", yylineno, yytext);
+    fprintf(stderr, "Error message: %s\n", s);
+    fprintf(stderr, "\n");
+    fprintf(stderr, "Common causes:\n");
+    fprintf(stderr, "  • Missing semicolon ';' after statement\n");
+    fprintf(stderr, "  • Mismatched parentheses () or braces {}\n");
+    fprintf(stderr, "  • Invalid function syntax (use: # funcName(params) { })\n");
+    fprintf(stderr, "  • Array parameters not supported (use: int x, not int x[])\n");
+    fprintf(stderr, "  • Missing return type or parameters in function\n");
+    fprintf(stderr, "\n");
 }
